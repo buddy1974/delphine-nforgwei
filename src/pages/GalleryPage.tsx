@@ -13,7 +13,7 @@ const GalleryPage = () => {
   );
 
   const momentImages = useMemo(
-    () => range(1, 28).map((n) => `/images/gallery-2/${n}.jpg`),
+    () => range(1, 21).map((n) => `/images/gallery-2/${n}.jpg`),
     []
   );
 
