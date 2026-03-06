@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Facebook, Instagram, MessageCircle } from "lucide-react";
-import BrandLogo from "@/components/BrandLogo";
+import logo from "@/assets/del-logo.png";
 
 const quickLinks = [
   { label: "Home", path: "/" },
@@ -14,17 +14,30 @@ const quickLinks = [
 
 const Footer = () => {
   return (
-    <footer>
-      {/* White logo bar */}
-      <div className="bg-white py-10 flex justify-center border-b border-gray-100">
-        <div style={{ maxWidth: 260 }}>
-          <BrandLogo variant="color" />
+    <footer className="bg-purple-deep text-primary-foreground">
+      {/* White logo card — centered in purple footer */}
+      <div className="flex justify-center pt-12 pb-8">
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: 14,
+            padding: "18px 26px",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 6px 16px rgba(0,0,0,0.15)",
+          }}
+        >
+          <img
+            src={logo}
+            alt="Delphine Mah Nforgwei"
+            style={{ maxWidth: 320, height: "auto", display: "block" }}
+          />
         </div>
       </div>
 
-      {/* Main footer — dark */}
-      <div className="bg-purple-deep text-primary-foreground">
-      <div className="container mx-auto px-6 lg:px-12 py-16">
+      {/* Main grid */}
+      <div className="container mx-auto px-6 lg:px-12 py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           {/* Brand + Ecosystem */}
           <div>
@@ -84,7 +97,6 @@ const Footer = () => {
             © {new Date().getFullYear()} Delphine Mah Nforgwei. All rights reserved.
           </p>
         </div>
-      </div>
       </div>
     </footer>
   );
