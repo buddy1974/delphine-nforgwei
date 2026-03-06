@@ -42,11 +42,24 @@ const Contact = () => {
             Contact
           </span>
           <h1 className="font-serif text-3xl sm:text-4xl lg:text-[2.85rem] font-bold text-foreground leading-tight">
-            Connect with Delphine
+            Contact the Leadership Network
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-            For speaking engagements, mentorship inquiries, or partnership opportunities, reach out below.
+            Connect with the Rev. Delphine Nforgwei Leadership Network. Our team will assist you with:
           </p>
+          <ul className="text-left inline-block space-y-2 text-sm sm:text-base text-muted-foreground">
+            {[
+              "E-Woman Conference",
+              "SMCC Certification Programs",
+              "The 7 Pillars of Elevation Program",
+              "Leadership inquiries and speaking engagements",
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: "hsl(38, 70%, 55%)" }} />
+                {item}
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -57,14 +70,14 @@ const Contact = () => {
 
             {/* WhatsApp CTA — prominent above form */}
             <a
-              href="https://wa.me/237677938198"
+              href="https://wa.me/237683493220"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-3 w-full py-4 rounded-xl font-semibold text-white transition-all duration-300 hover:opacity-90"
               style={{ background: "#25D366" }}
             >
               <MessageCircle size={20} />
-              Chat on WhatsApp
+              Message the Leadership Network
             </a>
 
             <div className="flex items-center gap-4">

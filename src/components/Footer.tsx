@@ -81,13 +81,13 @@ const Footer = () => {
           <div>
             <h4 className="font-serif text-lg font-semibold mb-4">Connect</h4>
             <div className="flex gap-4 mb-6">
-              <a href="https://wa.me/237677938198" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-primary-foreground/10 hover:bg-primary-foreground/20 flex items-center justify-center transition-colors" aria-label="WhatsApp"><MessageCircle size={18} /></a>
+              <a href="https://wa.me/237683493220" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-primary-foreground/10 hover:bg-primary-foreground/20 flex items-center justify-center transition-colors" aria-label="WhatsApp"><MessageCircle size={18} /></a>
               <a href="https://www.facebook.com/profile.php?id=100069101528488" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-primary-foreground/10 hover:bg-primary-foreground/20 flex items-center justify-center transition-colors" aria-label="Facebook"><Facebook size={18} /></a>
               <a href="https://www.instagram.com/delphine.nforgwei" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-primary-foreground/10 hover:bg-primary-foreground/20 flex items-center justify-center transition-colors" aria-label="Instagram"><Instagram size={18} /></a>
             </div>
-            <a href="https://wa.me/237677938198" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-primary-foreground/70 hover:text-primary-foreground transition-colors">
+            <a href="https://wa.me/237683493220" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-primary-foreground/70 hover:text-primary-foreground transition-colors">
               <MessageCircle size={16} />
-              +237 6 77 93 81 98
+              +237 6 83 49 32 20
             </a>
           </div>
         </div>
