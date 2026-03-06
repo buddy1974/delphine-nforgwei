@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { FadeIn } from "@/components/FadeIn";
 
 /* ── Data ── */
 
@@ -97,7 +99,7 @@ const testimonials = [
   },
 ];
 
-/* ── Shared card component ── */
+/* ── Card component ── */
 
 interface ProgramCardProps {
   title: string;
@@ -112,20 +114,26 @@ interface ProgramCardProps {
 }
 
 const ProgramCard = ({ title, desc, intro, bullets, cta, slug, external, accent, index = 0 }: ProgramCardProps) => {
-  return (
-    <div
-      className="rounded-xl border border-border bg-card p-8 lg:p-10 flex flex-col justify-between relative overflow-hidden animate-fade-in"
+  const content = (
+    <motion.div
+      className="rounded-2xl border border-border bg-card p-8 lg:p-10 flex flex-col justify-between relative overflow-hidden h-full"
       style={{
-        animationDelay: `${index * 0.1}s`,
-        animationFillMode: "backwards",
-        ...(accent ? { boxShadow: "0 10px 40px -10px hsl(288 72% 25% / 0.15)" } : {}),
+        borderRadius: "16px",
+        boxShadow: accent
+          ? "0 6px 24px -6px hsl(288 72% 25% / 0.12)"
+          : "0 4px 16px -4px hsla(288, 20%, 30%, 0.06)",
       }}
+      whileHover={{
+        y: -6,
+        boxShadow: "0 20px 40px -8px hsla(288, 30%, 30%, 0.15)",
+      }}
+      transition={{ duration: 0.3 }}
     >
       {accent && <div className="absolute top-0 left-0 right-0 h-[3px] bg-primary/60 rounded-t-xl" />}
       <div>
         <h3 className="font-serif text-xl lg:text-[1.3rem] font-bold text-foreground mb-3 leading-snug">{title}</h3>
-        {desc && <p className="text-muted-foreground text-sm leading-relaxed">{desc}</p>}
-        {intro && <p className="text-muted-foreground text-sm leading-relaxed mb-2">{intro}</p>}
+        {desc && <p className="text-muted-foreground text-sm leading-[1.7]">{desc}</p>}
+        {intro && <p className="text-muted-foreground text-sm leading-[1.7] mb-2">{intro}</p>}
         {bullets && (
           <ul className="space-y-1 mt-1">
             {bullets.map((b) => (
@@ -140,41 +148,40 @@ const ProgramCard = ({ title, desc, intro, bullets, cta, slug, external, accent,
       <div className="mt-8">
         {external ? (
           <a href={external} target="_blank" rel="noopener noreferrer">
-            <Button
-              variant="outline"
-              className="w-full border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide"
-            >
+            <Button variant="outline" className="w-full border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide rounded-xl transition-all duration-300 hover:scale-[1.02]">
               {cta}
             </Button>
           </a>
         ) : (
           <Link to={`/connect?program=${slug}`}>
-            <Button
-              variant="outline"
-              className="w-full border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide"
-            >
+            <Button variant="outline" className="w-full border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide rounded-xl transition-all duration-300 hover:scale-[1.02]">
               {cta}
             </Button>
           </Link>
         )}
       </div>
-    </div>
+    </motion.div>
+  );
+
+  return (
+    <FadeIn variant="fade-up" delay={index * 0.1}>
+      {content}
+    </FadeIn>
   );
 };
 
 /* ── Section header ── */
 
 const SectionHeader = ({ label, headline, sub }: { label: string; headline: string; sub: string }) => (
-  <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-    <span
-      className="inline-block text-xs font-semibold tracking-[0.2em] uppercase"
-      style={{ color: "hsl(38, 70%, 55%)" }}
-    >
-      {label}
-    </span>
-    <h2 className="font-serif text-3xl lg:text-[2.6rem] font-bold text-foreground leading-tight">{headline}</h2>
-    <p className="text-muted-foreground text-[0.95rem]">{sub}</p>
-  </div>
+  <FadeIn variant="fade-up">
+    <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
+      <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
+        {label}
+      </span>
+      <h2 className="font-serif text-3xl lg:text-[2.6rem] font-bold text-foreground leading-tight">{headline}</h2>
+      <p className="text-muted-foreground text-[0.95rem] leading-[1.7]">{sub}</p>
+    </div>
+  </FadeIn>
 );
 
 const Divider = () => <div className="w-full h-px bg-gradient-to-r from-transparent via-border to-transparent" />;
@@ -184,24 +191,30 @@ const Divider = () => <div className="w-full h-px bg-gradient-to-r from-transpar
 const Programs = () => (
   <>
     {/* Hero */}
-    <section className="relative py-28 lg:py-40 gradient-purple-soft">
-      <div className="container mx-auto px-6 lg:px-12 text-center max-w-3xl">
-        <h1 className="font-serif text-4xl lg:text-[3.4rem] font-bold text-foreground leading-tight mb-5">
-          Life-Changing Programs That Propel&nbsp;You
-        </h1>
-        <p className="text-lg lg:text-xl text-muted-foreground mb-8">
-          Faith-based transformation for women ready to elevate in purpose, marriage, leadership, and legacy.
-        </p>
-        <p className="text-muted-foreground text-[0.92rem] leading-relaxed max-w-2xl mx-auto">
-          With over 15 years of experience as a women's relationship and leadership coach — and as a John Maxwell
-          Certified Speaker, Trainer, and Coach — Delphine Mah Nforgwei equips women with clarity, strategy, and
-          spiritual grounding to thrive intentionally in every area of life.
-        </p>
-      </div>
+    <section className="relative py-[100px] lg:py-[140px] gradient-purple-soft overflow-hidden">
+      <div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full opacity-[0.06] pointer-events-none"
+        style={{ background: "hsl(288, 72%, 38%)", filter: "blur(80px)" }}
+      />
+      <FadeIn variant="slide-up">
+        <div className="container mx-auto px-6 lg:px-12 text-center max-w-3xl relative z-10">
+          <h1 className="font-serif text-4xl lg:text-[3.4rem] font-bold text-foreground leading-tight mb-5 tracking-tight">
+            Life-Changing Programs That Propel&nbsp;You
+          </h1>
+          <p className="text-lg lg:text-xl text-muted-foreground mb-8 leading-[1.7]">
+            Faith-based transformation for women ready to elevate in purpose, marriage, leadership, and legacy.
+          </p>
+          <p className="text-muted-foreground text-[0.92rem] leading-[1.7] max-w-2xl mx-auto">
+            With over 15 years of experience as a women's relationship and leadership coach — and as a John Maxwell
+            Certified Speaker, Trainer, and Coach — Delphine Mah Nforgwei equips women with clarity, strategy, and
+            spiritual grounding to thrive intentionally in every area of life.
+          </p>
+        </div>
+      </FadeIn>
     </section>
 
     {/* Section 1 — Identity & Purpose */}
-    <section className="py-28 lg:py-36">
+    <section className="py-[100px] lg:py-[120px]">
       <div className="container mx-auto px-6 lg:px-12">
         <SectionHeader
           label="Identity & Purpose Alignment"
@@ -219,7 +232,7 @@ const Programs = () => (
     <Divider />
 
     {/* Section 2 — Marriage & Relationships */}
-    <section className="py-28 lg:py-36 bg-secondary/30">
+    <section className="py-[100px] lg:py-[120px] bg-secondary/30">
       <div className="container mx-auto px-6 lg:px-12">
         <SectionHeader
           label="Marriage & Relationship Restoration"
@@ -237,7 +250,7 @@ const Programs = () => (
     <Divider />
 
     {/* Section 3 — Leadership & Global Impact */}
-    <section className="py-28 lg:py-36 bg-secondary/60">
+    <section className="py-[100px] lg:py-[120px] bg-secondary/60">
       <div className="container mx-auto px-6 lg:px-12">
         <SectionHeader
           label="Leadership & Global Impact"
@@ -255,21 +268,19 @@ const Programs = () => (
     <Divider />
 
     {/* Testimonial Strip */}
-    <section className="py-20 lg:py-28">
+    <section className="py-[100px] lg:py-[120px]">
       <div className="container mx-auto px-6 lg:px-12">
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {testimonials.map((t, i) => (
-            <div
-              key={t.name}
-              className="text-center space-y-4 px-4 animate-fade-in"
-              style={{ animationDelay: `${i * 0.1}s`, animationFillMode: "backwards" }}
-            >
-              <p className="font-serif text-[0.95rem] italic text-foreground/80 leading-relaxed">"{t.quote}"</p>
-              <div>
-                <span className="text-sm font-semibold text-foreground">{t.name}</span>
-                <span className="block text-xs text-muted-foreground tracking-wide mt-0.5">{t.tag}</span>
+            <FadeIn key={t.name} variant="fade-up" delay={i * 0.12}>
+              <div className="text-center space-y-4 px-4">
+                <p className="font-serif text-[0.95rem] italic text-foreground/80 leading-[1.75]">"{t.quote}"</p>
+                <div>
+                  <span className="text-sm font-semibold text-foreground">{t.name}</span>
+                  <span className="block text-xs text-muted-foreground tracking-wide mt-0.5">{t.tag}</span>
+                </div>
               </div>
-            </div>
+            </FadeIn>
           ))}
         </div>
       </div>
@@ -278,60 +289,71 @@ const Programs = () => (
     <Divider />
 
     {/* SMCC Funnel CTA */}
-    <section className="py-20 lg:py-28 bg-secondary/30">
+    <section className="py-[100px] lg:py-[120px] bg-secondary/30">
       <div className="container mx-auto px-6 lg:px-12 text-center max-w-2xl space-y-6">
-        <span
-          className="inline-block text-xs font-semibold tracking-[0.2em] uppercase"
-          style={{ color: "hsl(38, 70%, 55%)" }}
-        >
-          School of Marriage Counseling & Coaching
-        </span>
-        <h2 className="font-serif text-3xl lg:text-[2.6rem] font-bold text-foreground leading-tight">
-          Become a Certified Marriage Counselor
-        </h2>
-        <p className="text-muted-foreground text-[0.95rem] leading-relaxed max-w-xl mx-auto">
-          For those called to guide couples and strengthen families, the School of Marriage Counseling &amp; Coaching (SMCC) provides professional training and certification.
-        </p>
-        <a href="https://www.smcc.solutions" target="_blank" rel="noopener noreferrer">
-          <Button className="bg-primary text-primary-foreground font-semibold tracking-wide text-base px-10 py-6 rounded-lg hover:opacity-90 mt-2">
-            Explore SMCC Certification
-          </Button>
-        </a>
+        <FadeIn variant="scale-in">
+          <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
+            School of Marriage Counseling & Coaching
+          </span>
+          <h2 className="font-serif text-3xl lg:text-[2.6rem] font-bold text-foreground leading-tight mt-4">
+            Become a Certified Marriage Counselor
+          </h2>
+          <p className="text-muted-foreground text-[0.95rem] leading-[1.7] max-w-xl mx-auto mt-4">
+            For those called to guide couples and strengthen families, the School of Marriage Counseling &amp; Coaching (SMCC) provides professional training and certification.
+          </p>
+          <div className="mt-6">
+            <a href="https://www.smcc.solutions" target="_blank" rel="noopener noreferrer">
+              <motion.div className="inline-block" whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                <Button className="bg-primary text-primary-foreground font-semibold tracking-wide text-base px-10 py-6 rounded-xl hover:opacity-90 shadow-[0_6px_24px_-6px_hsl(288,72%,38%,0.4)] hover:shadow-[0_10px_32px_-6px_hsl(288,72%,38%,0.55)] transition-shadow duration-300">
+                  Explore SMCC Certification
+                </Button>
+              </motion.div>
+            </a>
+          </div>
+        </FadeIn>
       </div>
     </section>
 
     <Divider />
 
     {/* Global CTA Block */}
-    <section className="py-20 lg:py-28 bg-background">
+    <section className="py-[100px] lg:py-[120px] bg-background">
       <div className="container mx-auto px-6 lg:px-12 text-center max-w-2xl space-y-8">
-        <div
-          className="w-16 h-[1.5px] mx-auto rounded-full"
-          style={{ background: "linear-gradient(90deg, transparent, hsl(38, 70%, 55%), transparent)" }}
-        />
-        <h2 className="font-serif text-3xl lg:text-[2.6rem] font-bold text-foreground leading-tight">
-          Ready for Your Next Step?
-        </h2>
-        <p className="text-muted-foreground text-[0.95rem]">
-          Every transformation begins with a decision. Choose your next step below.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
-          <Link to="/programs">
-            <Button className="bg-primary text-primary-foreground font-semibold tracking-wide px-8 py-5 rounded-lg hover:opacity-90">
-              Explore Programs
-            </Button>
-          </Link>
-          <a href="https://www.e-womanconference.online" target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide px-8 py-5 rounded-lg">
-              Attend the Conference
-            </Button>
-          </a>
-          <Link to="/contact">
-            <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide px-8 py-5 rounded-lg">
-              Contact Delphine
-            </Button>
-          </Link>
-        </div>
+        <FadeIn variant="fade-up">
+          <div
+            className="w-16 h-[1.5px] mx-auto rounded-full"
+            style={{ background: "linear-gradient(90deg, transparent, hsl(38, 70%, 55%), transparent)" }}
+          />
+          <h2 className="font-serif text-3xl lg:text-[2.6rem] font-bold text-foreground leading-tight mt-8">
+            Ready for Your Next Step?
+          </h2>
+          <p className="text-muted-foreground text-[0.95rem] leading-[1.7] mt-4">
+            Every transformation begins with a decision. Choose your next step below.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
+            <Link to="/programs">
+              <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                <Button className="bg-primary text-primary-foreground font-semibold tracking-wide px-8 py-5 rounded-xl hover:opacity-90">
+                  Explore Programs
+                </Button>
+              </motion.div>
+            </Link>
+            <a href="https://www.e-womanconference.online" target="_blank" rel="noopener noreferrer">
+              <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide px-8 py-5 rounded-xl">
+                  Attend the Conference
+                </Button>
+              </motion.div>
+            </a>
+            <Link to="/contact">
+              <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide px-8 py-5 rounded-xl">
+                  Contact Delphine
+                </Button>
+              </motion.div>
+            </Link>
+          </div>
+        </FadeIn>
       </div>
     </section>
   </>

@@ -71,3 +71,17 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Technical Operations Standard
+
+This project follows the global deployment standard located at:
+
+../TECH-OPS-STANDARD.md
+
+The standard defines:
+
+- Git → GitHub → Cloudflare/Vercel deployment flow
+- SPA routing configuration
+- build and deployment requirements
+- security patterns for admin routes
+
+All infrastructure changes must follow that document.
