@@ -277,24 +277,61 @@ const Programs = () => (
 
     <Divider />
 
-    {/* Final Conversion Anchor */}
-    <section className="py-32 lg:py-40">
+    {/* SMCC Funnel CTA */}
+    <section className="py-20 lg:py-28 bg-secondary/30">
+      <div className="container mx-auto px-6 lg:px-12 text-center max-w-2xl space-y-6">
+        <span
+          className="inline-block text-xs font-semibold tracking-[0.2em] uppercase"
+          style={{ color: "hsl(38, 70%, 55%)" }}
+        >
+          School of Marriage Counseling & Coaching
+        </span>
+        <h2 className="font-serif text-3xl lg:text-[2.6rem] font-bold text-foreground leading-tight">
+          Become a Certified Marriage Counselor
+        </h2>
+        <p className="text-muted-foreground text-[0.95rem] leading-relaxed max-w-xl mx-auto">
+          For those called to guide couples and strengthen families, the School of Marriage Counseling &amp; Coaching (SMCC) provides professional training and certification.
+        </p>
+        <a href="https://www.smcc.solutions" target="_blank" rel="noopener noreferrer">
+          <Button className="bg-primary text-primary-foreground font-semibold tracking-wide text-base px-10 py-6 rounded-lg hover:opacity-90 mt-2">
+            Explore SMCC Certification
+          </Button>
+        </a>
+      </div>
+    </section>
+
+    <Divider />
+
+    {/* Global CTA Block */}
+    <section className="py-20 lg:py-28 bg-background">
       <div className="container mx-auto px-6 lg:px-12 text-center max-w-2xl space-y-8">
         <div
           className="w-16 h-[1.5px] mx-auto rounded-full"
           style={{ background: "linear-gradient(90deg, transparent, hsl(38, 70%, 55%), transparent)" }}
         />
         <h2 className="font-serif text-3xl lg:text-[2.6rem] font-bold text-foreground leading-tight">
-          Your Next Level Is Not Accidental.
+          Ready for Your Next Step?
         </h2>
         <p className="text-muted-foreground text-[0.95rem]">
-          Transformation requires intention. Intention requires action.
+          Every transformation begins with a decision. Choose your next step below.
         </p>
-        <Link to="/connect">
-          <Button className="bg-primary text-primary-foreground font-semibold tracking-wide text-base px-10 py-6 rounded-lg hover:opacity-90 mt-4">
-            Start the Conversation
-          </Button>
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
+          <Link to="/programs">
+            <Button className="bg-primary text-primary-foreground font-semibold tracking-wide px-8 py-5 rounded-lg hover:opacity-90">
+              Explore Programs
+            </Button>
+          </Link>
+          <a href="https://www.e-womanconference.online" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide px-8 py-5 rounded-lg">
+              Attend the Conference
+            </Button>
+          </a>
+          <Link to="/contact">
+            <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/5 font-semibold tracking-wide px-8 py-5 rounded-lg">
+              Contact Delphine
+            </Button>
+          </Link>
+        </div>
       </div>
     </section>
   </>
