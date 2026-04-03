@@ -67,19 +67,26 @@ const GalleryPage = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
           {images
             .filter((src) => isJpeg(src))
-            .map((src) => (
+            .map((src, idx) => {
+              const n = idx + 1;
+              const label =
+                activeTab === "studio"
+                  ? `Rev. Delphine Nforgwei — Studio portrait ${n}`
+                  : `Rev. Delphine Nforgwei — Ministry moment ${n}`;
+              return (
               <div
                 key={src}
                 className="group relative overflow-hidden rounded-2xl bg-card border border-border"
               >
                 <img
                   src={src}
-                  alt="Gallery image"
+                  alt={label}
                   className="w-full h-[220px] sm:h-[260px] lg:h-[300px] object-cover transition-transform duration-300 group-hover:scale-105"
                   loading="lazy"
                 />
               </div>
-            ))}
+              );
+            })}
         </div>
 
       </div>

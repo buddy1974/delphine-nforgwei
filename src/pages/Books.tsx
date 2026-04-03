@@ -64,9 +64,9 @@ const Books = () => {
                 className="w-full h-[360px] object-cover rounded-lg mb-6"
               />
 
-              <h3 className="text-xl font-semibold text-foreground mb-3">
+              <h2 className="text-xl font-semibold text-foreground mb-3">
                 {book.title}
-              </h3>
+              </h2>
 
               <p className="text-muted-foreground text-sm mb-6">
                 {book.description}

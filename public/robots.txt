@@ -1,3 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api
+
 User-agent: Googlebot
 Allow: /
 
@@ -10,5 +15,4 @@ Allow: /
 User-agent: facebookexternalhit
 Allow: /
 
-User-agent: *
-Allow: /
+Sitemap: https://www.delphine-nforgwei.com/sitemap.xml
