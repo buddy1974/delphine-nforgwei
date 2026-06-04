@@ -16,7 +16,11 @@ const nextConfig = {
       {
         source: "/(.*)",
         headers: [
-          { key: "X-Frame-Options", value: "DENY" },
+          // SAMEORIGIN (not DENY): the page editor embeds the draft preview
+          // in a same-origin iframe. DENY would block it. SAMEORIGIN allows
+          // same-origin frames while still preventing any external site from
+          // embedding the OS in their pages.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
