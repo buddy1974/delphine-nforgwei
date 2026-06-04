@@ -8,10 +8,11 @@ import {
   type SectionPatch,
   type SectionType,
   type PageStatus,
+  type RowLayout,
 } from "@/lib/db/pages";
 
 const SECTION_COLS =
-  "id, page_id, type, title, subtitle, body, image_url, button_label, button_url, order";
+  "id, page_id, type, title, subtitle, body, image_url, button_label, button_url, order, parent_id, col, layout";
 
 /** All pages for a brand, newest first. */
 export async function listPages(brandKey: string): Promise<PageRow[]> {
@@ -128,6 +129,139 @@ export async function deleteSection(sectionId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// ── H6B.2: Row / layout management ──────────────────────────────
+
+/** Return fresh sections list for a page (used after structural moves). */
+async function freshSections(pageId: string, db: ReturnType<typeof createSupabaseAdminClient>): Promise<SectionRow[]> {
+  const { data } = await db.from("sections").select(SECTION_COLS).eq("page_id", pageId).order("order", { ascending: true });
+  return (data ?? []) as SectionRow[];
+}
+
+/** Create a new empty row container at the end of the page. */
+export async function createRow(pageId: string, layout: RowLayout): Promise<SectionRow> {
+  const db = createSupabaseAdminClient();
+  const { data: last } = await db
+    .from("sections").select("order").eq("page_id", pageId).is("parent_id", null)
+    .order("order", { ascending: false }).limit(1);
+  const nextOrder = ((last?.[0] as { order: number } | undefined)?.order ?? -1) + 1;
+  const { data, error } = await db
+    .from("sections")
+    .insert({ page_id: pageId, type: "row", layout, order: nextOrder })
+    .select(SECTION_COLS).single();
+  if (error) throw new Error(error.message);
+  revalidatePath("/pages");
+  return data as SectionRow;
+}
+
+/** Change the layout of an existing row. */
+export async function updateRowLayout(rowId: string, layout: RowLayout): Promise<void> {
+  const db = createSupabaseAdminClient();
+  const { error } = await db.from("sections").update({ layout }).eq("id", rowId);
+  if (error) throw new Error(error.message);
+}
+
+/** Duplicate a row and all its children, inserting immediately below. */
+export async function duplicateRow(
+  rowId: string,
+  pageId: string
+): Promise<{ row: SectionRow; children: SectionRow[] }> {
+  const db = createSupabaseAdminClient();
+
+  const { data: src } = await db.from("sections").select(SECTION_COLS).eq("id", rowId).single();
+  if (!src) throw new Error("Row not found.");
+
+  const { data: kids } = await db.from("sections").select(SECTION_COLS)
+    .eq("parent_id", rowId).order("order", { ascending: true });
+
+  // Shift sections below the source row
+  const srcOrder = (src as SectionRow).order;
+  const { data: below } = await db.from("sections").select("id, order")
+    .eq("page_id", pageId).is("parent_id", null).gt("order", srcOrder);
+  if (below && below.length > 0) {
+    await Promise.all(below.map((s: { id: string; order: number }) =>
+      db.from("sections").update({ order: s.order + 1 }).eq("id", s.id)
+    ));
+  }
+
+  // Insert duplicate row
+  const { data: newRow, error: rowErr } = await db.from("sections")
+    .insert({ page_id: pageId, type: "row", layout: (src as SectionRow).layout, order: srcOrder + 1 })
+    .select(SECTION_COLS).single();
+  if (rowErr || !newRow) throw new Error(rowErr?.message ?? "Row insert failed.");
+
+  // Copy children
+  const childRows = (kids ?? []) as SectionRow[];
+  const newChildren: SectionRow[] = [];
+  if (childRows.length > 0) {
+    const { data: inserted } = await db.from("sections")
+      .insert(childRows.map(c => ({
+        page_id: pageId, type: c.type, title: c.title, subtitle: c.subtitle,
+        body: c.body, image_url: c.image_url, button_label: c.button_label,
+        button_url: c.button_url, order: c.order, col: c.col,
+        parent_id: (newRow as SectionRow).id,
+      })))
+      .select(SECTION_COLS);
+    newChildren.push(...((inserted ?? []) as SectionRow[]));
+  }
+
+  revalidatePath("/pages");
+  return { row: newRow as SectionRow, children: newChildren };
+}
+
+/** Move a section into a specific slot in a row. Returns refreshed section list. */
+export async function moveToSlot(
+  sectionId: string,
+  rowId: string,
+  col: number
+): Promise<SectionRow[]> {
+  const db = createSupabaseAdminClient();
+  const { data: sec } = await db.from("sections").select("page_id, parent_id, order")
+    .eq("id", sectionId).single();
+  if (!sec) throw new Error("Section not found.");
+  const pageId = (sec as { page_id: string }).page_id;
+
+  // Find next order in target slot
+  const { data: slotKids } = await db.from("sections").select("order")
+    .eq("parent_id", rowId).eq("col", col).order("order", { ascending: false }).limit(1);
+  const slotOrder = ((slotKids?.[0] as { order: number } | undefined)?.order ?? -1) + 1;
+
+  await db.from("sections").update({ parent_id: rowId, col, order: slotOrder }).eq("id", sectionId);
+
+  // Compact root if section was at root
+  if (!(sec as SectionRow).parent_id) {
+    const { data: rootSecs } = await db.from("sections").select("id, order")
+      .eq("page_id", pageId).is("parent_id", null).order("order", { ascending: true });
+    if (rootSecs && rootSecs.length > 0) {
+      await Promise.all((rootSecs as { id: string; order: number }[]).map((s, i) =>
+        db.from("sections").update({ order: i }).eq("id", s.id)
+      ));
+    }
+  }
+  revalidatePath("/pages");
+  return freshSections(pageId, db);
+}
+
+/** Move a section from a slot back to root level (appended at end). Returns refreshed list. */
+export async function moveToRoot(sectionId: string, pageId: string): Promise<SectionRow[]> {
+  const db = createSupabaseAdminClient();
+  const { data: rootSecs } = await db.from("sections").select("order")
+    .eq("page_id", pageId).is("parent_id", null).order("order", { ascending: false }).limit(1);
+  const nextOrder = ((rootSecs?.[0] as { order: number } | undefined)?.order ?? -1) + 1;
+  await db.from("sections").update({ parent_id: null, col: null, order: nextOrder }).eq("id", sectionId);
+  revalidatePath("/pages");
+  return freshSections(pageId, db);
+}
+
+/** Batch-update col + order for slot children (within-row reorder). */
+export async function reorderRowChildren(
+  updates: { id: string; col: number; order: number }[]
+): Promise<void> {
+  const db = createSupabaseAdminClient();
+  await Promise.all(updates.map(({ id, col, order }) =>
+    db.from("sections").update({ col, order }).eq("id", id)
+  ));
+}
+
 /** All pages across every brand, alphabetical by title per brand. */
 export async function listAllPages(): Promise<PageRow[]> {
   const db = createSupabaseAdminClient();
@@ -222,12 +356,20 @@ export async function duplicateSection(
     .single();
   if (srcErr || !src) throw new Error("Section not found.");
 
-  // Shift all sections with order > src.order down by 1 to make room
-  const { data: later } = await db
-    .from("sections")
-    .select("id, order")
-    .eq("page_id", pageId)
-    .gt("order", (src as SectionRow).order);
+  const source = src as SectionRow;
+
+  // Scope order-shift to siblings only — never cross container boundaries.
+  // Slot sections: shift only siblings in the same slot (same parent_id + col).
+  // Root sections: shift only other root sections (parent_id IS NULL).
+  const { data: later } = source.parent_id
+    ? await db.from("sections").select("id, order")
+        .eq("parent_id", source.parent_id)
+        .eq("col", source.col ?? 0)
+        .gt("order", source.order)
+    : await db.from("sections").select("id, order")
+        .eq("page_id", pageId)
+        .is("parent_id", null)
+        .gt("order", source.order);
 
   if (later && later.length > 0) {
     await Promise.all(
@@ -237,19 +379,21 @@ export async function duplicateSection(
     );
   }
 
-  // Insert the duplicate immediately after the source
+  // Insert duplicate — preserve parent_id and col so copy lands in the same container
   const { data: created, error: insErr } = await db
     .from("sections")
     .insert({
       page_id: pageId,
-      type: (src as SectionRow).type,
-      title: (src as SectionRow).title,
-      subtitle: (src as SectionRow).subtitle,
-      body: (src as SectionRow).body,
-      image_url: (src as SectionRow).image_url,
-      button_label: (src as SectionRow).button_label,
-      button_url: (src as SectionRow).button_url,
-      order: (src as SectionRow).order + 1,
+      type: source.type,
+      title: source.title,
+      subtitle: source.subtitle,
+      body: source.body,
+      image_url: source.image_url,
+      button_label: source.button_label,
+      button_url: source.button_url,
+      order: source.order + 1,
+      parent_id: source.parent_id ?? null, // stay in same row slot
+      col: source.col ?? null,             // stay in same column
     })
     .select(SECTION_COLS)
     .single();
@@ -349,9 +493,17 @@ export async function restoreVersion(
   // Delete existing sections
   await db.from("sections").delete().eq("page_id", pageId);
 
-  // Re-insert from snapshot
+  // Re-insert from snapshot.
+  // Sort rows (parent_id=null) before children so the FK constraint is satisfied on insert.
+  // Preserve original UUIDs so parent_id references remain valid after re-insert.
   if (snapshotSections.length > 0) {
-    const inserts = snapshotSections.map((s, i) => ({
+    const sorted = [...snapshotSections].sort((a, b) => {
+      if (!a.parent_id && b.parent_id) return -1; // rows first
+      if (a.parent_id && !b.parent_id) return 1;  // children after
+      return 0;
+    });
+    const inserts = sorted.map((s) => ({
+      id: s.id,                       // preserve UUID → parent_id refs stay valid
       page_id: pageId,
       type: s.type,
       title: s.title,
@@ -360,7 +512,10 @@ export async function restoreVersion(
       image_url: s.image_url,
       button_label: s.button_label,
       button_url: s.button_url,
-      order: i,
+      order: s.order,                 // preserve original per-context order
+      parent_id: s.parent_id ?? null, // preserve row hierarchy
+      col: s.col ?? null,             // preserve column assignment
+      layout: s.layout ?? null,       // preserve row layout
     }));
     await db.from("sections").insert(inserts);
   }

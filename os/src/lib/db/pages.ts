@@ -1,6 +1,7 @@
 /** Shared types for the Page Builder. Mirrors the `pages` + `sections` tables. */
 
 export const SECTION_TYPES = [
+  "row",          // H6B: multi-column row container
   "hero",
   "text",
   "cards",
@@ -11,6 +12,10 @@ export const SECTION_TYPES = [
 ] as const;
 
 export type SectionType = (typeof SECTION_TYPES)[number];
+
+// H6B: column layout specs supported by the row renderer
+export const ROW_LAYOUTS = ["1", "2", "3", "70-30", "30-70"] as const;
+export type RowLayout = (typeof ROW_LAYOUTS)[number];
 
 export const PAGE_STATUSES = ["draft", "review", "published"] as const;
 export type PageStatus = (typeof PAGE_STATUSES)[number];
@@ -28,6 +33,11 @@ export interface SectionRow {
   id: string;
   page_id: string;
   type: SectionType;
+  // H6B layout fields (null for all legacy sections)
+  parent_id: string | null;   // null = top-level; uuid = child of that row
+  col: number | null;         // 0-based column index when inside a row
+  layout: RowLayout | null;   // column-width spec for type='row' sections
+  // Content fields
   title: string | null;
   subtitle: string | null;
   body: string | null;
@@ -37,7 +47,11 @@ export interface SectionRow {
   order: number;
 }
 
-/** Fields a section editor may patch (autosave). */
+/**
+ * Fields the section editor may patch via autosave.
+ * Structural fields (parent_id, col, layout) are intentionally excluded —
+ * they are set at creation time, not edited inline.
+ */
 export type SectionPatch = Partial<
   Pick<
     SectionRow,
@@ -46,6 +60,7 @@ export type SectionPatch = Partial<
 >;
 
 export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
+  row: "Row",
   hero: "Banner",
   text: "Content",
   cards: "Cards",
@@ -56,6 +71,7 @@ export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
 };
 
 export const SECTION_ICONS: Record<SectionType, string> = {
+  row: "⬜",
   hero: "🏠",
   text: "📄",
   cards: "🃏",

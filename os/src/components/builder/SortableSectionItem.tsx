@@ -1,12 +1,26 @@
 "use client";
 
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   SECTION_TYPE_LABEL,
   SECTION_ICONS,
   type SectionRow,
+  type RowLayout,
 } from "@/lib/db/pages";
+
+function layoutNumCols(layout: RowLayout | null): number {
+  if (layout === "3") return 3;
+  if (layout === "1") return 1;
+  return 2;
+}
+function colLabel(layout: RowLayout | null, col: number): string {
+  if (layout === "70-30") return col === 0 ? "Left (wide)" : "Right (narrow)";
+  if (layout === "30-70") return col === 0 ? "Left (narrow)" : "Right (wide)";
+  if (layout === "3") return ["Left", "Center", "Right"][col] ?? `Col ${col + 1}`;
+  return col === 0 ? "Left" : "Right";
+}
 
 /* ── Six-dot drag handle icon ───────────────────────────────── */
 function DotGrid(props: React.SVGProps<SVGSVGElement>) {
@@ -32,6 +46,8 @@ export interface SortableSectionItemProps {
   onSelect: (id: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  availableRows?: { id: string; layout: RowLayout | null; label: string }[];
+  onMoveToSlot?: (sectionId: string, rowId: string, col: number) => void;
 }
 
 export default function SortableSectionItem({
@@ -42,7 +58,10 @@ export default function SortableSectionItem({
   onSelect,
   onDuplicate,
   onDelete,
+  availableRows = [],
+  onMoveToSlot,
 }: SortableSectionItemProps) {
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
   const {
     attributes,
     listeners,
@@ -131,6 +150,43 @@ export default function SortableSectionItem({
                 isSelected ? "opacity-100" : "opacity-0 group-hover/row:opacity-100"
               }`}
             >
+              {/* Move to row */}
+              {availableRows.length > 0 && onMoveToSlot && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    title="Move into row…"
+                    onClick={(e) => { e.stopPropagation(); setShowMoveMenu((v) => !v); }}
+                    className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] text-gray-400 hover:text-plum hover:bg-plum/5 transition-colors font-bold"
+                  >
+                    ⬜
+                  </button>
+                  {showMoveMenu && (
+                    <div
+                      className="absolute right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-xl shadow-xl z-30 py-1 w-44"
+                      onMouseLeave={() => setShowMoveMenu(false)}
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-3 py-1.5">Move into row…</p>
+                      {availableRows.map((r) =>
+                        Array.from({ length: layoutNumCols(r.layout) }, (_, c) => (
+                          <button
+                            key={`${r.id}-${c}`}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMoveToSlot(section.id, r.id, c);
+                              setShowMoveMenu(false);
+                            }}
+                            className="w-full text-left text-xs px-3 py-1.5 hover:bg-gray-50 text-charcoal"
+                          >
+                            {r.label}, {colLabel(r.layout, c)}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 type="button"
                 title="Duplicate section"

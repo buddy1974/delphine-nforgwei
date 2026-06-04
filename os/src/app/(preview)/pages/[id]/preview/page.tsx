@@ -6,7 +6,7 @@ import type { SectionRow } from "@/lib/db/pages";
 export const dynamic = "force-dynamic";
 
 const SECTION_COLS =
-  "id, page_id, type, title, subtitle, body, image_url, button_label, button_url, order";
+  "id, page_id, type, title, subtitle, body, image_url, button_label, button_url, order, parent_id, col, layout";
 
 /* ── Vanilla JS bridge injected into the preview iframe ─────── */
 // Handles two-way postMessage communication with PageEditor.
@@ -146,6 +146,18 @@ export default async function DraftPreviewPage({
   const rows = (sections ?? []) as SectionRow[];
   const navPages = (brandPages ?? []) as { id: string; slug: string; title: string }[];
 
+  // H6B.1: separate top-level sections from row children.
+  // Legacy sections have parent_id=null, so they all fall into topLevel — no regression.
+  const childMap = new Map<string, SectionRow[]>();
+  for (const s of rows) {
+    if (s.parent_id) {
+      const bucket = childMap.get(s.parent_id) ?? [];
+      bucket.push(s);
+      childMap.set(s.parent_id, bucket);
+    }
+  }
+  const topLevel = rows.filter((s) => !s.parent_id);
+
   const statusColor =
     page.status === "published" ? "#4ade80"
     : page.status === "review"  ? "#fbbf24"
@@ -215,7 +227,7 @@ export default async function DraftPreviewPage({
 
         {/* ── Page sections ── */}
         <main style={{ minHeight: "60vh" }}>
-          {rows.length === 0 ? (
+          {topLevel.length === 0 ? (
             <div style={{
               display: "flex", flexDirection: "column", alignItems: "center",
               justifyContent: "center", minHeight: "50vh", color: "#9ca3af", fontFamily: ff,
@@ -224,7 +236,18 @@ export default async function DraftPreviewPage({
               <p style={{ fontWeight: 700, fontSize: 16, color: "#374151", marginBottom: 4 }}>No sections yet</p>
               <p style={{ fontSize: 13 }}>Add sections from the editor to preview them here.</p>
             </div>
-          ) : rows.map((s) => <SectionBlock key={s.id} section={s} brand={brand} />)}
+          ) : topLevel.map((s) =>
+              s.type === "row" ? (
+                <RowRenderer
+                  key={s.id}
+                  row={s}
+                  children={childMap.get(s.id) ?? []}
+                  brand={brand}
+                />
+              ) : (
+                <SectionBlock key={s.id} section={s} brand={brand} />
+              )
+            )}
         </main>
 
         {/* ── Website footer ── */}
@@ -261,6 +284,62 @@ export default async function DraftPreviewPage({
       {/* ── postMessage bridge script ── */}
       {/* eslint-disable-next-line react/no-danger */}
       <script dangerouslySetInnerHTML={{ __html: BRIDGE_SCRIPT }} />
+    </div>
+  );
+}
+
+/* ══ H6B.1: Row / column layout renderer ════════════════════════ */
+
+/**
+ * Converts a layout spec string to an array of CSS width values,
+ * one entry per column.
+ */
+function layoutToWidths(layout: string | null): string[] {
+  switch (layout) {
+    case "1":     return ["100%"];
+    case "3":     return ["33.333%", "33.333%", "33.334%"];
+    case "70-30": return ["70%", "30%"];
+    case "30-70": return ["30%", "70%"];
+    case "2":
+    default:      return ["50%", "50%"];
+  }
+}
+
+/**
+ * Renders a row section as a flex row with columns.
+ * Children are sorted by col index, then by order within each col.
+ * Falls back gracefully when a column has no children.
+ */
+function RowRenderer({
+  row,
+  children,
+  brand,
+}: {
+  row: SectionRow;
+  children: SectionRow[];
+  brand: OsBrand;
+}) {
+  const colWidths = layoutToWidths(row.layout);
+
+  return (
+    <div
+      data-section-wrapper={row.id}
+      data-section-id={row.id}
+      style={{ display: "flex", width: "100%", alignItems: "flex-start" }}
+    >
+      {colWidths.map((width, colIdx) => {
+        const colChildren = children
+          .filter((c) => c.col === colIdx)
+          .sort((a, b) => a.order - b.order);
+
+        return (
+          <div key={colIdx} style={{ width, flexShrink: 0, minWidth: 0, overflow: "hidden" }}>
+            {colChildren.map((s) => (
+              <SectionBlock key={s.id} section={s} brand={brand} />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
