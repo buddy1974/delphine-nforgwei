@@ -4,6 +4,13 @@ const nextConfig = {
   basePath: "/os",
   reactStrictMode: true,
   poweredByHeader: false,
+
+  // Expose basePath to client so iframe srcs can be prefixed correctly.
+  // Without this, iframe src="/pages/..." resolves without the /os prefix → 404.
+  env: {
+    NEXT_PUBLIC_BASE_PATH: "/os",
+  },
+
   async headers() {
     return [
       {

@@ -459,7 +459,7 @@ export default function PageEditor({
           <iframe
             ref={iframeRef}
             key={previewVersion}
-            src={`/pages/${page.id}/preview?v=${previewVersion}`}
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/pages/${page.id}/preview?v=${previewVersion}`}
             title="Draft page preview"
             className="absolute inset-0 w-full h-full border-none bg-white"
             onLoad={onIframeLoad}

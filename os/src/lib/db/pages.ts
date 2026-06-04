@@ -60,13 +60,13 @@ export type SectionPatch = Partial<
 >;
 
 export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
-  row: "Row",
-  hero: "Banner",
-  text: "Content",
-  cards: "Cards",
-  cta: "Call to Action",
-  image: "Photo",
-  event_block: "Event",
+  row:          "Row Layout",
+  hero:         "Hero Section",
+  text:         "About Section",
+  cards:        "Feature Cards",
+  cta:          "Call to Action",
+  image:        "Photo",
+  event_block:  "Event",
   program_card: "Program",
 };
 

@@ -470,7 +470,7 @@ export default function PageList() {
             <div className="flex-1 relative">
               <iframe
                 key={`${selectedPage.id}-${previewKey}`}
-                src={`/pages/${selectedPage.id}/preview?v=${previewKey}`}
+                src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/pages/${selectedPage.id}/preview?v=${previewKey}`}
                 title={`Preview: ${selectedPage.title}`}
                 className="absolute inset-0 w-full h-full border-none bg-white"
               />
