@@ -137,3 +137,30 @@
 9. **Windows path encoding limitation documented** — Files inside `(shell)` and `(preview)` App Router groups cannot be reliably written via the Edit/Write tools on Windows due to parentheses in the path. All such files must be written via `python3` bash script. This is an established known risk from prior sessions.
 
 **Consequence:** First-edition product structure is complete. TSC passes clean.
+
+---
+
+## P1B.7A — Delphine Real Component Rendering (2026-06-15)
+
+### Decision: Extract Section Components from Index.tsx and Wire OsPreview to Real Components
+
+**Context:** OsPreview.tsx was rendering using a generic block renderer (brown/gold box style, not the real Delphine purple homepage). The OS canvas iframe showed a simulated page, not the actual Delphine website appearance.
+
+**Decision:** Extract all homepage sections from Index.tsx into named, props-capable components under `src/components/sections/`. Refactor Index.tsx to compose from these components. Update OsPreview.tsx with a brand-aware rendering function that routes Delphine section types through real components, falling back to the generic renderer for unmapped types and non-Delphine brands.
+
+**Components Extracted:**
+- HeroSection.tsx — hero with portrait, blobs, motion animations
+- AboutSection.tsx — two-column about preview with photo
+- ProgramsSection.tsx — services/programs card grid with CTA
+- BooksSection.tsx — stats row + book covers + link
+- EventsSection.tsx — speaking/media gallery grid
+- GallerySection.tsx — authority strip photo grid
+- ContactSection.tsx — closing CTA over hero-bg
+- TransformationSection.tsx — 3-card framework (Identity/Family/Leadership)
+- EcosystemSection.tsx — SMCC + E-Woman platform cards
+- TestimonialsSection.tsx — 3-card testimonial grid
+- index.ts — barrel export for all sections
+
+**Props pattern:** All props optional with hardcoded defaults matching current content. Public homepage passes no props → identical output. OS preview passes section data → same components render dynamic content.
+
+**Consequence:** Index.tsx reduced from ~670 lines to 65 lines of composition. Public homepage is visually identical. OsPreview Delphine path now renders real purple Delphine components. Generic renderer preserved as fallback. Security unchanged.

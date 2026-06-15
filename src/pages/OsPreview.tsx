@@ -1,4 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import {
+  HeroSection,
+  AboutSection,
+  ProgramsSection,
+  BooksSection,
+  EventsSection,
+  GallerySection,
+  ContactSection,
+  TransformationSection,
+  TestimonialsSection,
+  EcosystemSection,
+} from "@/components/sections";
+import type { ProgramItem } from "@/components/sections";
 
 const OS_URL = import.meta.env.VITE_OS_URL || "http://localhost:3100/os";
 
@@ -19,6 +34,7 @@ type Section = {
 };
 
 type PreviewData = {
+  brand?: string;
   page: {
     id: string;
     versionId: string;
@@ -30,6 +46,220 @@ type PreviewData = {
 };
 
 type LoadState = "loading" | "ready" | "error";
+
+// ── Mapping helpers ────────────────────────────────────────────────────────────
+
+function mapToHeroProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+    body: s.body ?? undefined,
+    image_url: s.image_url ?? undefined,
+    button_label: s.button_label ?? undefined,
+    button_url: s.button_url ?? undefined,
+  };
+}
+
+function mapToAboutProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+    body: s.body ?? undefined,
+    image_url: s.image_url ?? undefined,
+    button_label: s.button_label ?? undefined,
+    button_url: s.button_url ?? undefined,
+  };
+}
+
+function mapToProgramsProps(s: Section) {
+  // body may be JSON array of items, or plain text
+  let items: ProgramItem[] | undefined;
+  if (s.body) {
+    try {
+      const parsed = JSON.parse(s.body);
+      if (Array.isArray(parsed)) items = parsed as ProgramItem[];
+    } catch {
+      // Not JSON — use default items
+    }
+  }
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+    button_label: s.button_label ?? undefined,
+    button_url: s.button_url ?? undefined,
+    items,
+  };
+}
+
+function mapToBooksProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+    button_label: s.button_label ?? undefined,
+    button_url: s.button_url ?? undefined,
+  };
+}
+
+function mapToEventsProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+    body: s.body ?? undefined,
+    button_label: s.button_label ?? undefined,
+    button_url: s.button_url ?? undefined,
+  };
+}
+
+function mapToGalleryProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+  };
+}
+
+function mapToContactProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    body: s.body ?? undefined,
+    button_label: s.button_label ?? undefined,
+    button_url: s.button_url ?? undefined,
+  };
+}
+
+function mapToTransformationProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+    body: s.body ?? undefined,
+  };
+}
+
+function mapToTestimonialsProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+  };
+}
+
+function mapToEcosystemProps(s: Section) {
+  return {
+    title: s.title ?? undefined,
+    subtitle: s.subtitle ?? undefined,
+    body: s.body ?? undefined,
+  };
+}
+
+// ── Delphine brand renderer ───────────────────────────────────────────────────
+
+function renderDelphineSection(section: Section) {
+  switch (section.type) {
+    case "hero":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <HeroSection {...mapToHeroProps(section)} />
+        </div>
+      );
+    case "text":
+    case "about":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <AboutSection {...mapToAboutProps(section)} />
+        </div>
+      );
+    case "cards":
+    case "programs":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <ProgramsSection {...mapToProgramsProps(section)} />
+        </div>
+      );
+    case "program_card":
+      // Single program card — renders as programs section with one item
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <ProgramsSection
+            title={section.title ?? undefined}
+            subtitle={section.subtitle ?? undefined}
+            items={[
+              {
+                title: section.title ?? "Program",
+                description: section.body ?? "",
+                slug: section.button_url?.replace(/.*program=/, "") || undefined,
+                external: section.button_url?.startsWith("http") ? section.button_url : undefined,
+              },
+            ]}
+          />
+        </div>
+      );
+    case "books":
+    case "book":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <BooksSection {...mapToBooksProps(section)} />
+        </div>
+      );
+    case "event_block":
+    case "events":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <EventsSection {...mapToEventsProps(section)} />
+        </div>
+      );
+    case "image":
+    case "gallery":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <GallerySection {...mapToGalleryProps(section)} />
+        </div>
+      );
+    case "cta":
+    case "contact":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <ContactSection {...mapToContactProps(section)} />
+        </div>
+      );
+    case "transformation":
+    case "framework":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <TransformationSection {...mapToTransformationProps(section)} />
+        </div>
+      );
+    case "testimonials":
+    case "testimonial":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <TestimonialsSection {...mapToTestimonialsProps(section)} />
+        </div>
+      );
+    case "ecosystem":
+      return (
+        <div key={section.id} data-section-id={section.id}>
+          <EcosystemSection {...mapToEcosystemProps(section)} />
+        </div>
+      );
+    default:
+      // Unmapped type — fall through to generic renderer
+      return null;
+  }
+}
+
+function renderSection(section: Section, brand: string | undefined) {
+  if (brand === "delphine") {
+    const result = renderDelphineSection(section);
+    if (result !== null) return result;
+    // Unmapped type falls to generic
+  }
+  // Generic fallback for non-Delphine brands and unmapped Delphine types
+  return (
+    section.type === "row"
+      ? null // rows handled separately at top level
+      : <PreviewBlock key={section.id} section={section} />
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function OsPreview() {
   const token = useMemo(() => new URLSearchParams(window.location.search).get("token"), []);
@@ -124,11 +354,18 @@ export default function OsPreview() {
   }
   const topLevel = rows.filter((row) => !row.parent_id);
 
+  const brand = data.brand ?? "delphine";
+  const isDelphine = brand === "delphine";
+
   return (
     <article data-page-version-id={data.page.versionId} className="bg-background">
+      {/* Preview banner — always shown regardless of brand */}
       <div className="bg-accent/20 border-b border-border px-6 py-2 text-center text-xs font-semibold text-muted-foreground">
         Secure preview · immutable version {data.page.versionId}
       </div>
+
+      {/* For Delphine brand, wrap in full Navbar/Footer for canvas fidelity */}
+      {isDelphine && <Navbar />}
 
       {topLevel.length === 0 ? (
         <section className="min-h-[45vh] flex items-center justify-center px-6 text-center">
@@ -140,14 +377,18 @@ export default function OsPreview() {
           </div>
         </section>
       ) : (
-        topLevel.map((section) =>
-          section.type === "row" ? (
-            <RowBlock key={section.id} row={section} children={childMap.get(section.id) ?? []} />
-          ) : (
-            <PreviewBlock key={section.id} section={section} />
-          )
-        )
+        <div className={isDelphine ? "pt-24" : ""}>
+          {topLevel.map((section) =>
+            section.type === "row" ? (
+              <RowBlock key={section.id} row={section} children={childMap.get(section.id) ?? []} brand={brand} />
+            ) : (
+              renderSection(section, brand)
+            )
+          )}
+        </div>
       )}
+
+      {isDelphine && <Footer />}
     </article>
   );
 }
@@ -162,7 +403,9 @@ function ensureMeta(name: string, content: string) {
   meta.content = content;
 }
 
-function RowBlock({ row, children }: { row: Section; children: Section[] }) {
+// ── Generic fallback renderer (non-Delphine brands + unmapped types) ──────────
+
+function RowBlock({ row, children, brand }: { row: Section; children: Section[]; brand: string }) {
   const widths = layoutToWidths(row.layout);
   return (
     <section data-section-id={row.id} className="container mx-auto px-6 lg:px-12 py-8">

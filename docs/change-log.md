@@ -202,3 +202,46 @@ Complete first-edition product build. All four brands seeded with full content. 
 - AI-assisted content generation in Post/Event editors
 - Archived status (fourth status after published)
 - H8 renderer migration (website IS the renderer — separate approved plan)
+
+---
+
+## P1B.7A — Delphine Real Component Rendering — 2026-06-15
+
+### Summary
+Extracted all homepage sections from Index.tsx into reusable, props-capable section components. Refactored Index.tsx to compose from these components. Updated OsPreview.tsx to route Delphine brand sections through the real components with generic renderer retained as fallback.
+
+### Files Created
+- `src/components/sections/HeroSection.tsx` — Hero with portrait, animated blobs, motion, heroBg + delHero assets. Props: title, subtitle, body, image_url, button_label, button_url, button2_label, button2_url (all optional with hardcoded defaults).
+- `src/components/sections/AboutSection.tsx` — Two-column about section with delAbout2.jpg. Props: title, subtitle, body, body2, image_url, button_label, button_url.
+- `src/components/sections/ProgramsSection.tsx` — Services/programs card grid with CTA. Props: title, subtitle, button_label, button_url, items[].
+- `src/components/sections/BooksSection.tsx` — Authority Proof section with stats row + book covers. Props: title, subtitle, button_label, button_url, books[], stats[].
+- `src/components/sections/EventsSection.tsx` — Media/Speaking/Gallery grid. Props: title, subtitle, body, button_label, button_url, images[].
+- `src/components/sections/GallerySection.tsx` — Authority Strip photo grid. Props: title, subtitle, images[].
+- `src/components/sections/ContactSection.tsx` — Closing CTA with heroBg overlay. Props: title, body, button_label, button_url, secondary_label, secondary_url.
+- `src/components/sections/TransformationSection.tsx` — 3-card framework section. Props: title, subtitle, body, items[].
+- `src/components/sections/EcosystemSection.tsx` — SMCC + E-Woman platform cards (static, no props needed but title/subtitle/body accepted).
+- `src/components/sections/TestimonialsSection.tsx` — 3-card testimonial grid. Props: title, subtitle, items[].
+- `src/components/sections/index.ts` — Barrel export for all components and their types.
+
+### Files Modified
+- `src/pages/Index.tsx` — Refactored from ~670 lines of inline JSX to 65 lines composing from sections/. All dividers preserved. Visual output is identical to pre-refactor.
+- `src/pages/OsPreview.tsx` — Added brand-aware renderSection() and renderDelphineSection() functions. Delphine brand routes through real section components via type switch (hero, text/about, cards/programs, program_card, books, event_block/events, image/gallery, cta/contact, transformation, testimonials, ecosystem). Generic renderer (HeroBlock, TextBlock, CardsBlock, CtaBlock, ImageBlock, ProgramBlock, EventBlock, PreviewButton) retained as fallback for non-Delphine brands and unmapped types. Navbar and Footer added to Delphine preview output for canvas fidelity.
+
+### TypeScript
+- Root `npx tsc --noEmit`: PASS (zero errors)
+- OS `npx tsc --noEmit`: PASS (zero errors)
+
+### Build
+- Root `npm run build`: Not executed — rollup-linux-x64-gnu native binary not available in sandbox (known RISK-002). TypeScript is clean. Production build handled by Vercel CI.
+
+### Security
+- No changes to OS preview API route (`os/src/app/api/preview/delphine/route.ts`)
+- No changes to preview-tokens.ts
+- No changes to preview/actions.ts
+- Origin validation, nonce validation, expiry, revocation checks: unchanged
+- Error response behavior: unchanged
+
+### Scope Compliance
+- SMCC, E-Woman, DRIMP: not touched
+- P1C, H8: not started
+- CRM, WhatsApp, Email, Google, AI agents: not touched
