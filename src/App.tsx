@@ -27,26 +27,36 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/programs" element={<Programs />} />
-            <Route path="/books" element={<Books />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/gallery" element={<GalleryPage />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/connect" element={<Connect />} />
-            <Route path="/thank-you" element={<ThankYou />} />
-            <Route path="/p/:slug" element={<OsPage />} />
-            <Route path="/blog" element={<BlogIndex />} />
-            <Route path="/blog/:slug" element={<BlogPost />} />
-            <Route path="/os-events" element={<OsEventsIndex />} />
-            <Route path="/os-events/:slug" element={<OsEventDetail />} />
-            <Route path="/os-preview/delphine" element={<OsPreview />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          {/* OS preview — full-page canvas, renders its own Navbar/Footer, no Layout wrapper */}
+          <Route path="/os-preview/:brand" element={<OsPreview />} />
+
+          {/* Public site — all routes wrapped in Layout (Navbar + Footer + WhatsApp) */}
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/programs" element={<Programs />} />
+                  <Route path="/books" element={<Books />} />
+                  <Route path="/events" element={<Events />} />
+                  <Route path="/gallery" element={<GalleryPage />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/connect" element={<Connect />} />
+                  <Route path="/thank-you" element={<ThankYou />} />
+                  <Route path="/p/:slug" element={<OsPage />} />
+                  <Route path="/blog" element={<BlogIndex />} />
+                  <Route path="/blog/:slug" element={<BlogPost />} />
+                  <Route path="/os-events" element={<OsEventsIndex />} />
+                  <Route path="/os-events/:slug" element={<OsEventDetail />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Layout>
+            }
+          />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
