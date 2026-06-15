@@ -19,7 +19,8 @@ export default async function ShellLayout({
     <BrandProvider>
       <div className="flex min-h-screen">
         <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* Content column — push down on mobile to clear the fixed top bar */}
+        <div className="flex-1 flex flex-col min-w-0 md:pt-0 pt-14">
           <Topbar userEmail={user.email ?? ""} />
           <main className="flex-1 p-8">{children}</main>
         </div>

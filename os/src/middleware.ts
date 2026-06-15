@@ -32,10 +32,12 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  const isDelphinePreview = pathname.startsWith("/api/preview/delphine");
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/api/public");
+    pathname.startsWith("/api/public") ||
+    isDelphinePreview;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -47,6 +49,12 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
+  }
+
+  if (isDelphinePreview) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    response.headers.set("Referrer-Policy", "no-referrer");
   }
 
   return response;

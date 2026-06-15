@@ -14,6 +14,10 @@ import Contact from "./pages/Contact";
 import Connect from "./pages/Connect";
 import ThankYou from "./pages/ThankYou";
 import NotFound from "./pages/NotFound";
+import OsPage from "./pages/OsPage";
+import { BlogIndex, BlogPost } from "./pages/Blog";
+import { OsEventsIndex, OsEventDetail } from "./pages/OsEvents";
+import OsPreview from "./pages/OsPreview";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +38,12 @@ const App = () => (
             <Route path="/contact" element={<Contact />} />
             <Route path="/connect" element={<Connect />} />
             <Route path="/thank-you" element={<ThankYou />} />
+            <Route path="/p/:slug" element={<OsPage />} />
+            <Route path="/blog" element={<BlogIndex />} />
+            <Route path="/blog/:slug" element={<BlogPost />} />
+            <Route path="/os-events" element={<OsEventsIndex />} />
+            <Route path="/os-events/:slug" element={<OsEventDetail />} />
+            <Route path="/os-preview/delphine" element={<OsPreview />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>

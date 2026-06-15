@@ -49,7 +49,7 @@ export interface SectionRow {
 
 /**
  * Fields the section editor may patch via autosave.
- * Structural fields (parent_id, col, layout) are intentionally excluded —
+ * Structural fields (parent_id, col, layout) are intentionally excluded --
  * they are set at creation time, not edited inline.
  */
 export type SectionPatch = Partial<
@@ -64,19 +64,19 @@ export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
   hero:         "Hero Section",
   text:         "About Section",
   cards:        "Feature Cards",
-  cta:          "Call to Action",
+  cta:          "Call To Action",
   image:        "Photo",
-  event_block:  "Event",
-  program_card: "Program",
+  event_block:  "Event Section",
+  program_card: "Program Section",
 };
 
 export const SECTION_ICONS: Record<SectionType, string> = {
-  row: "⬜",
-  hero: "🏠",
-  text: "📄",
-  cards: "🃏",
-  cta: "📢",
-  image: "🖼️",
-  event_block: "📅",
-  program_card: "🎓",
+  row: "row",
+  hero: "hero",
+  text: "text",
+  cards: "cards",
+  cta: "cta",
+  image: "image",
+  event_block: "event",
+  program_card: "program",
 };

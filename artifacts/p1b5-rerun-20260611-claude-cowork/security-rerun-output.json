@@ -1,0 +1,188 @@
+{
+  "iframeSrcRedacted": "https://www.delphine-nforgwei.com/os-preview/delphine?token=<redacted>",
+  "sessionId": "eac9484c-9453-4d44-808f-974b2e2682d2",
+  "pageVersionId": "19b88d87-aee5-4526-b32f-35d6007d92dd",
+  "valid": {
+    "name": "valid",
+    "status": 200,
+    "body": {
+      "page": {
+        "id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+        "versionId": "19b88d87-aee5-4526-b32f-35d6007d92dd",
+        "title": "Home",
+        "status": "published",
+        "createdAt": "2026-06-11T20:06:57.791102+00:00"
+      },
+      "sections": [
+        {
+          "id": "6d570cc2-47f6-4c16-b677-c21ed82e193a",
+          "col": null,
+          "body": "Empowering women to build VIP marriages and purposeful lives.",
+          "type": "hero",
+          "order": 0,
+          "title": "Delphine Nforgwei",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": "Wife. Mentor. Marriage Coach.",
+          "image_url": null,
+          "parent_id": null,
+          "button_url": "/connect",
+          "button_label": "Work With Me"
+        },
+        {
+          "id": "7766d181-1e48-4c23-90bc-889acb1a77f2",
+          "col": null,
+          "body": "15+ years equipping couples and women across Cameroon and the diaspora.",
+          "type": "text",
+          "order": 1,
+          "title": "About",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": "",
+          "image_url": null,
+          "parent_id": null,
+          "button_url": null,
+          "button_label": null
+        },
+        {
+          "id": "b3df274b-8369-45b6-9c18-2b6ca24ee317",
+          "col": null,
+          "body": "Book a discovery conversation today.",
+          "type": "cta",
+          "order": 2,
+          "title": "Ready to begin?",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": "",
+          "image_url": null,
+          "parent_id": null,
+          "button_url": "/connect",
+          "button_label": "Get Started"
+        },
+        {
+          "id": "f1ee294b-2b80-4461-bcf9-84cfdc6083bc",
+          "col": null,
+          "body": "Transformative one-on-one coaching that helps couples rediscover intimacy, alignment, and purpose in their marriage.",
+          "type": "program_card",
+          "order": 3,
+          "title": "Marriage Coaching",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": "Private & Couples Sessions",
+          "image_url": null,
+          "parent_id": null,
+          "button_url": "/programs/marriage-coaching",
+          "button_label": "Learn More"
+        },
+        {
+          "id": "14be6fb9-c932-4bbf-b1d2-f79c0414fddc",
+          "col": null,
+          "body": "An immersive weekend experience for couples ready to break through barriers and build an extraordinary partnership.",
+          "type": "program_card",
+          "order": 4,
+          "title": "VIP Marriage Intensive",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": "Weekend Retreat Experience",
+          "image_url": null,
+          "parent_id": null,
+          "button_url": "/programs/vip-intensive",
+          "button_label": "Reserve Your Spot"
+        },
+        {
+          "id": "6ac907cb-beab-4fae-b4f3-4c0d4e20aaf9",
+          "col": null,
+          "body": "A safe, structured community where women grow in identity, purpose, and relational intelligence.",
+          "type": "program_card",
+          "order": 5,
+          "title": "Women's Mentorship Circle",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": "Group Mentorship Program",
+          "image_url": null,
+          "parent_id": null,
+          "button_url": "/programs/mentorship",
+          "button_label": "Join the Circle"
+        },
+        {
+          "id": "a18433bb-15de-49e2-a795-8084309ef532",
+          "col": null,
+          "body": "Join Delphine and a curated group of couples for a powerful 2-day summit on building a VIP marriage. Limited seats available.",
+          "type": "event_block",
+          "order": 6,
+          "title": "Upcoming Events",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": "VIP Marriage Summit — Douala, Cameroon · July 2026",
+          "image_url": null,
+          "parent_id": null,
+          "button_url": "/events/vip-summit-2026",
+          "button_label": "Register Now"
+        },
+        {
+          "id": "4891c0f3-1c82-476c-a280-75317f5d419e",
+          "col": null,
+          "body": null,
+          "type": "cards",
+          "order": 7,
+          "title": "Books & Resources",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": "Practical tools for your marriage journey",
+          "image_url": null,
+          "parent_id": null,
+          "button_url": null,
+          "button_label": null
+        },
+        {
+          "id": "60cfaa3a-31a6-4672-8271-a7b2e44018d8",
+          "col": null,
+          "body": null,
+          "type": "image",
+          "order": 8,
+          "title": "Gallery",
+          "layout": null,
+          "page_id": "346de2b5-5afb-46f9-a41e-b69153ba10be",
+          "subtitle": null,
+          "image_url": null,
+          "parent_id": null,
+          "button_url": null,
+          "button_label": null
+        }
+      ]
+    }
+  },
+  "security": [
+    {
+      "name": "expired-token",
+      "status": 404,
+      "body": {
+        "error": "Preview token is invalid or expired."
+      }
+    },
+    {
+      "name": "revoked-token",
+      "status": 404,
+      "body": {
+        "error": "Preview session was revoked."
+      }
+    },
+    {
+      "name": "nonce-mismatch",
+      "status": 404,
+      "body": {
+        "error": "Preview token is invalid."
+      }
+    }
+  ],
+  "wrongBrand": {
+    "status": "BLOCKED",
+    "reason": "preview_sessions.brand_key has FK to real brands; directive forbids touching SMCC/E-Woman/DRIMP/CRM for a cross-brand row."
+  },
+  "finalSessionRow": {
+    "brand_key": "delphine",
+    "revoked_at": null,
+    "nonce_hash": "p1b5-invalid-nonce-hash",
+    "page_version_id": "19b88d87-aee5-4526-b32f-35d6007d92dd"
+  }
+}

@@ -23,7 +23,6 @@ const BrandContext = createContext<BrandContextValue | null>(null);
 export function BrandProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // Fallback brand stored in localStorage (for flat routes and direct navigation)
   const [storedKey, setStoredKey] = useState<OsBrand["key"]>(DEFAULT_BRAND_KEY);
 
   useEffect(() => {
@@ -38,8 +37,6 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, key);
   }
 
-  // H7: Brand from URL segment takes precedence.
-  // e.g. /smcc/pages → brand is SMCC, regardless of localStorage.
   const urlBrandKey =
     OS_BRANDS.find((b) =>
       pathname.split("/").some((seg) => seg === b.key)
@@ -47,18 +44,20 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
 
   const activeBrandKey = urlBrandKey ?? storedKey;
 
-  const value = useMemo<BrandContextValue>(() => {
-    const brand =
-      OS_BRANDS.find((b) => b.key === activeBrandKey) ?? OS_BRANDS[0];
-    return { brand, brands: OS_BRANDS, setBrandKey };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBrandKey]);
+  const value = useMemo<BrandContextValue>(
+    () => ({
+      brand: OS_BRANDS.find((b) => b.key === activeBrandKey) ?? OS_BRANDS[0],
+      brands: OS_BRANDS,
+      setBrandKey,
+    }),
+    [activeBrandKey]
+  );
 
   return <BrandContext.Provider value={value}>{children}</BrandContext.Provider>;
 }
 
 export function useBrand(): BrandContextValue {
   const ctx = useContext(BrandContext);
-  if (!ctx) throw new Error("useBrand must be used inside <BrandProvider>");
+  if (!ctx) throw new Error("useBrand must be used inside BrandProvider");
   return ctx;
 }

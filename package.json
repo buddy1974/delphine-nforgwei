@@ -86,5 +86,21 @@
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19",
     "vitest": "^3.2.4"
-  }
+  },
+  "description": "**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID",
+  "main": "eslint.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/buddy1974/delphine-nforgwei.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/buddy1974/delphine-nforgwei/issues"
+  },
+  "homepage": "https://github.com/buddy1974/delphine-nforgwei#readme"
 }

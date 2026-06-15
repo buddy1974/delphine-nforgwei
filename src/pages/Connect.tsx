@@ -100,21 +100,35 @@ const Connect = () => {
     setIsSubmitting(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const serviceLabel = SERVICES.find((s) => s.id === selectedService)?.label ?? "";
+      const fullMessage = [
+        `Service: ${serviceLabel}`,
+        programLabel ? `Program: ${programLabel}` : "",
+        country.trim() ? `Country: ${country.trim()}` : "",
+        `Preferred contact: ${contactMethod}`,
+        showEventFields ? `Event: ${eventDate} @ ${eventLocation}` : "",
+        showProgramField ? `Format: ${programType}` : "",
+        showConfidentialField ? `Confidential: ${isConfidential}` : "",
+        "",
+        message.trim(),
+      ].filter(Boolean).join("\n");
 
-      const _formData = {
-        fullName: fullName.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        country: country.trim(),
-        service: SERVICES.find((s) => s.id === selectedService)?.label ?? "",
-        program: programLabel || undefined,
-        message: message.trim(),
-        contactMethod,
-        ...(showEventFields && { eventDate, eventLocation }),
-        ...(showProgramField && { programType }),
-        ...(showConfidentialField && { isConfidential }),
-      };
+      // Send into the Ecosystem OS Message Center (non-blocking — never breaks UX)
+      const OS_URL = import.meta.env.VITE_OS_URL || "http://localhost:3100/os";
+      try {
+        await fetch(`${OS_URL}/api/public/delphine/contact`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: fullName.trim(),
+            email: email.trim(),
+            phone: phone.trim(),
+            message: fullMessage,
+          }),
+        });
+      } catch {
+        /* OS offline — still thank the user */
+      }
 
       navigate("/thank-you");
     } catch {
@@ -202,7 +216,7 @@ const Connect = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="phone" className="text-sm font-medium text-foreground">Phone / WhatsApp</Label>
-                  <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+237 6 77 93 81 98" className="bg-background/60 focus:ring-primary/30" />
+                  <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+237 6 00 00 00 00" className="bg-background/60 focus:ring-primary/30" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="country" className="text-sm font-medium text-foreground">Country</Label>
