@@ -2,11 +2,9 @@
 
 ## RISK-007 — P1B Preview Sessions Migration Pending Remote Application
 **Severity:** Medium  
-**Status:** Active until migration is applied
+**Status:** RESOLVED — 2026-06-15
 
-**Description:** P1B adds `os/supabase/migrations/0004_preview_sessions.sql`, but the remote Supabase schema currently does not expose `public.preview_sessions`. Secure preview session creation will return a database error until this migration is applied.
-
-**Mitigation:** Apply the additive migration through the approved Supabase migration path. No destructive schema changes are required.
+**Description:** P1B adds `os/supabase/migrations/0004_preview_sessions.sql`. Migration has been successfully applied — confirmed by `preview_sessions` rows with `access_count` incrementing in production Supabase project `mohogdfdzmewwvgcizga`. OS preview session creation and token validation are working end-to-end in production.
 
 ---
 

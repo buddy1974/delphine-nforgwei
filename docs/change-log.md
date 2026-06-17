@@ -1,5 +1,20 @@
 # Change Log
 
+## P1B.7A Visual Verification — 2026-06-15
+
+### Result: PASS
+
+Visual confirmation that the OS canvas iframe renders the real public Delphine website via the OsPreview secure preview mechanism. Observed: purple HeroSection, real Navbar with all nav links, Delphine's photo, live production copy. No X-Frame-Options blocking. Cross-origin iframe embedding confirmed working.
+
+**Diagnostic notes recorded (not bugs — standard browser behaviour):**
+- `contentBlocked: true` (`!iframe.contentDocument`) is expected for cross-origin iframes. Not an X-Frame-Options indicator.
+- BrandWorkspace "Creating secure preview…" state appears white and tiny at full-page scale — not a blank/broken canvas.
+- `access_count` increments on the `preview_sessions` row confirm OS API calls reaching Supabase.
+
+**Status: P1B CLOSED. No further work in this phase. H8 / P1C require human approval.**
+
+---
+
 ## P1B — Secure Delphine Preview Implementation — 2026-06-11
 
 ### Summary

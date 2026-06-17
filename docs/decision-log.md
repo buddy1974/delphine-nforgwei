@@ -1,5 +1,23 @@
 # Decision Log
 
+## P1B.7A — Visual Verification: Real Website Renders in OS Canvas (2026-06-15)
+
+### Outcome: CONFIRMED PASS
+
+**Verification performed:** Loaded `os-alpha-vert.vercel.app/os/delphine` with a fresh session. Zoomed into the OS canvas iframe. Real Delphine public website rendered correctly — purple HeroSection, real Navbar (Home / About / Programs / Books / Events / Gallery / Contact), Delphine's photo, all live copy.
+
+**Mechanism confirmed working end-to-end:**
+1. `BrandWorkspace` calls `createDelphinePreviewSession` server action
+2. Server action creates `preview_sessions` + `page_versions` records in Supabase, returns signed token URL
+3. Iframe loads `www.delphine-nforgwei.com/os-preview/delphine?token=...`
+4. `OsPreview` fetches `os-alpha-vert.vercel.app/os/api/preview/delphine?token=...`
+5. OS API validates HMAC token, nonce hash, TTL, revocation → returns `{ page, sections }`
+6. `OsPreview` renders real Delphine section components with live purple styling
+
+**P1B closed. H8 / P1C NOT started. Human approval required before next phase.**
+
+---
+
 ## P1B — Secure Preview Rendering Plane Scope (2026-06-11)
 
 ### Decision: OS Validates, Public Website Renders
