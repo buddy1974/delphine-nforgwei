@@ -240,23 +240,49 @@ Extracted all homepage sections from Index.tsx into reusable, props-capable sect
 
 ### Files Modified
 - `src/pages/Index.tsx` — Refactored from ~670 lines of inline JSX to 65 lines composing from sections/. All dividers preserved. Visual output is identical to pre-refactor.
-- `src/pages/OsPreview.tsx` — Added brand-aware renderSection() and renderDelphineSection() functions. Delphine brand routes through real section components via type switch (hero, text/about, cards/programs, program_card, books, event_block/events, image/gallery, cta/contact, transformation, testimonials, ecosystem). Generic renderer (HeroBlock, TextBlock, CardsBlock, CtaBlock, ImageBlock, ProgramBlock, EventBlock, PreviewButton) retained as fallback for non-Delphine brands and unmapped types. Navbar and Footer added to Delphine preview output for canvas fidelity.
+- `src/pages/OsPreview.tsx` — Added brand-aware renderSection() and renderDelphineSection() functions. Delphine brand routes through real section components via type switch (hero, text/about, cards/programs, program_card, books, event_block/events, image/gallery, cta/contact, transformation, testimonials, ecosystem). Generic renderer (HeroBlock, TextBlock, CardsBlock, CtaBlock, ImageBlo
+---
+
+## P1C — Publish Lifecycle Implementation — 2026-06-18
+
+### Summary
+
+Implemented the full Approve → Publish → Revalidate → Verify → Rollback lifecycle for Delphine pages. Published content is now served from immutable `page_versions` snapshots, not from the mutable `sections` table.
+
+### Core Principle
+
+**APPROVE EXACT REVISION. NEVER PUBLISH MUTABLE DRAFT.**
+
+Every publish operation snapshots the current sections into a `page_versions` row first, then sets `pages.published_version_id` to that immutable row. The public API serves that snapshot. Rollback moves the pointer only — zero section table mutations.
+
+### Migration: `0005_p1c_publish_lifecycle.sql`
+
+Applied to Supabase project `mohogdfdzmewwvgcizga`:
+- `pages.published_version_id uuid FK → page_versions.id ON DELETE SET NULL`
+- `page_versions.approved_by text`, `page_versions.approved_at timestamptz`
+- `publish_history` table: append-only audit log for all publish/rollback/unpublish events, RLS enabled
+
+### Files Changed
+
+- `os/supabase/migrations/0005_p1c_publish_lifecycle.sql` — NEW: additive schema migration
+- `os/src/app/api/public/[brand]/[slug]/route.ts` — MODIFIED: P1C path serves `page_versions.sections`; legacy fallback for NULL `published_version_id`; returns `publishedVersionId` in response
+- `os/src/app/(shell)/pages/actions.ts` — MODIFIED: added `PublishHistoryRow`, `publishVersion`, `rollbackToVersion`, `unpublishPage`, `verifyPublishedVersion`, `listPublishHistory`
+- `os/src/components/BrandWorkspace.tsx` — MODIFIED: P1C publish pipeline (`saveVersion → listVersions → publishVersion → verifyPublishedVersion`); verification state indicators (verifying/confirmed/stale/failed); `handleUnpublish`; imports `listVersions`, `publishVersion`, `unpublishPage`, `verifyPublishedVersion`
+- `os/src/components/builder/VersionHistory.tsx` — MODIFIED: "Publish Version" button; LIVE badge on published version; filters `label === 'Secure preview'` rows; separate restore vs publish confirm dialogs
+
+### Verification Mechanism
+
+After `publishVersion` succeeds:
+1. 2-second delay for Vercel edge revalidation to propagate
+2. `verifyPublishedVersion` fetches public API with `cache: "no-store"` + cache-bust query param
+3. Compares returned `publishedVersionId` against what was just published
+4. Sets `verifyState` → `confirmed` | `stale` | `failed`
 
 ### TypeScript
-- Root `npx tsc --noEmit`: PASS (zero errors)
-- OS `npx tsc --noEmit`: PASS (zero errors)
 
-### Build
-- Root `npm run build`: Not executed — rollup-linux-x64-gnu native binary not available in sandbox (known RISK-002). TypeScript is clean. Production build handled by Vercel CI.
+`npx tsc --noEmit` → zero errors after implementation.
 
-### Security
-- No changes to OS preview API route (`os/src/app/api/preview/delphine/route.ts`)
-- No changes to preview-tokens.ts
-- No changes to preview/actions.ts
-- Origin validation, nonce validation, expiry, revocation checks: unchanged
-- Error response behavior: unchanged
+### Scope
 
-### Scope Compliance
-- SMCC, E-Woman, DRIMP: not touched
-- P1C, H8: not started
-- CRM, WhatsApp, Email, Google, AI agents: not touched
+Delphine only. P1B (preview_sessions, OsPreview, preview token security) untouched. H8 not started.
+

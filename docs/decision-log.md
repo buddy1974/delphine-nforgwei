@@ -167,18 +167,22 @@
 **Decision:** Extract all homepage sections from Index.tsx into named, props-capable components under `src/components/sections/`. Refactor Index.tsx to compose from these components. Update OsPreview.tsx with a brand-aware rendering function that routes Delphine section types through real components, falling back to the generic renderer for unmapped types and non-Delphine brands.
 
 **Components Extracted:**
-- HeroSection.tsx — hero with portrait, blobs, motion animations
-- AboutSection.tsx — two-column about preview with photo
-- ProgramsSection.tsx — services/programs card grid with CTA
-- BooksSection.tsx — stats row + book covers + link
-- EventsSection.tsx — speaking/media gallery grid
-- GallerySection.tsx — authority strip photo grid
-- ContactSection.tsx — closing CTA over hero-bg
-- TransformationSection.tsx — 3-card framework (Identity/Family/Leadership)
-- EcosystemSection.tsx — SMCC + E-Woman platform cards
-- TestimonialsSection.tsx — 3-card testimonial grid
-- index.ts — barrel export for all sections
+- HeroSection.tsx — hero with
+---
 
-**Props pattern:** All props optional with hardcoded defaults matching current content. Public homepage passes no props → identical output. OS preview passes section data → same components render dynamic content.
+## P1C — Publish Lifecycle: Immutable Snapshot Architecture (2026-06-18)
 
-**Consequence:** Index.tsx reduced from ~670 lines to 65 lines of composition. Public homepage is visually identical. OsPreview Delphine path now renders real purple Delphine components. Generic renderer preserved as fallback. Security unchanged.
+### Decision: published_version_id Pointer Pattern
+
+**Context:** The `sections` table is mutable — editors change it in real time. Previously, `status = 'published'` meant the public API served whatever was in `sections` at query time. Any draft edit would silently alter live public content.
+
+**Decision:** On publish, first snapshot `sections` into an immutable `page_versions` row, then set `pages.published_version_id` to that row. The public API serves `page_versions.sections`, never the live `sections` table, when `published_version_id IS NOT NULL`.
+
+**Rollback mechanism:** Moving `pages.published_version_id` to a prior version ID constitutes a rollback. Zero section table mutations. Audit trail in `publish_history`.
+
+**Backward compatibility:** Pages published before P1C have `published_version_id = NULL`. The public API detects this and falls back to the mutable `sections` table (legacy path). This path is logged as a known limitation.
+
+**Consequence:** Draft edits after publish do NOT change live content until the next explicit publish action. Content and draft are now decoupled.
+
+---
+

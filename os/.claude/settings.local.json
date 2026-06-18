@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "mcp__claude_ai_Vercel__list_teams",
+      "mcp__claude_ai_Vercel__list_projects",
+      "mcp__claude_ai_Vercel__deploy_to_vercel",
+      "Bash(vercel --version)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(vercel whoami *)",
+      "Bash(vercel deploy *)",
+      "Bash(vercel inspect *)",
+      "Bash(curl *)",
+      "Bash(vercel env *)",
+      "Bash(findstr /R \"^[^=]*=\")",
+      "mcp__claude_ai_Vercel__get_deployment",
+      "mcp__claude_ai_Vercel__web_fetch_vercel_url",
+      "mcp__claude_ai_Vercel__get_project",
+      "mcp__claude_ai_Vercel__get_deployment_build_logs"
+    ]
+  }
+}

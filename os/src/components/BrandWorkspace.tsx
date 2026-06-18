@@ -14,10 +14,14 @@ import {
   updateSection,
   updatePageMeta,
   deleteSection,
+  saveVersion,
+  listVersions,
+  publishVersion,
+  unpublishPage,
+  verifyPublishedVersion,
 } from "@/app/(shell)/pages/actions";
 import SectionCard from "./builder/SectionCard";
 import { SECTION_TYPE_LABEL } from "@/lib/db/pages";
-import { saveVersion } from "@/app/(shell)/pages/actions";
 import { createDelphinePreviewSession } from "@/app/(shell)/preview/actions";
 
 /* ── postMessage types from preview iframe ─────────────────── */
@@ -83,12 +87,14 @@ export default function BrandWorkspace({
   /* ── Publish ── */
   const [publishPending, startPublish] = useTransition();
 
+  /* ── P1C: Publish verification state ── */
+  type VerifyState = "idle" | "verifying" | "confirmed" | "stale" | "failed";
+  const [verifyState, setVerifyState] = useState<VerifyState>("idle");
+  const [publishedVersionId, setPublishedVersionId] = useState<string | null>(null);
+
   /* ── Save Draft ── */
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
-
-  /* ── Version History panel ── */
-  const [historyOpen, setHistoryOpen] = useState(false);
 
   /* ── Helpers ── */
 
@@ -113,7 +119,6 @@ export default function BrandWorkspace({
     setIsEditMode(on);
     sendToIframe({ type: "EDIT_MODE", enabled: on });
     if (!on) {
-      // Exiting edit mode: close inspector and refresh preview
       setSelectedSectionId(null);
       selectedIdRef.current = null;
       bumpPreview(true);
@@ -144,7 +149,6 @@ export default function BrandWorkspace({
       if (msg.type === "SECTION_CLICK") {
         selectedIdRef.current = msg.sectionId;
         setSelectedSectionId(msg.sectionId);
-        // Auto-enable edit mode when user clicks a section
         if (!isEditModeRef.current) {
           isEditModeRef.current = true;
           setIsEditMode(true);
@@ -168,7 +172,7 @@ export default function BrandWorkspace({
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []); // stable — uses refs for values
+  }, []);
 
   useEffect(() => {
     sectionsRef.current = sections;
@@ -255,12 +259,55 @@ export default function BrandWorkspace({
     }
   }
 
-  /* ── Publish ── */
+  /* ── P1C: Publish exact revision (snapshot → publish → verify) ── */
   function handlePublish() {
     startPublish(async () => {
-      await updatePageMeta(selectedPageId, { status: "published" });
+      setVerifyState("idle");
+      const currentPage = pagesRef.current.find((p) => p.id === selectedPageId);
+      const pageTitle = currentPage?.title ?? "Published";
+      const pageSlug = currentPage?.slug;
+
+      // 1. Snapshot current sections into an immutable page_versions row
+      await saveVersion(selectedPageId, pageTitle, sectionsRef.current, "Published");
+
+      // 2. Fetch the just-created version id (newest first)
+      const versions = await listVersions(selectedPageId);
+      const latest = versions[0];
+      if (!latest) {
+        await updatePageMeta(selectedPageId, { status: "published" });
+        setPageStatus("published");
+        bumpPreview(true);
+        return;
+      }
+
+      // 3. Publish that exact immutable version — sets pages.published_version_id
+      const result = await publishVersion(selectedPageId, latest.id);
+      if ("error" in result) {
+        console.error("publishVersion failed:", result.error);
+        await updatePageMeta(selectedPageId, { status: "published" });
+        setPageStatus("published");
+        bumpPreview(true);
+        return;
+      }
+
       setPageStatus("published");
+      setPublishedVersionId(result.publishedVersionId);
       bumpPreview(true);
+
+      // 4. Verify live content (2s delay for Vercel revalidation to propagate)
+      if (pageSlug) {
+        setVerifyState("verifying");
+        await new Promise<void>((r) => setTimeout(r, 2000));
+        const verification = await verifyPublishedVersion("delphine", pageSlug, result.publishedVersionId);
+        if ("error" in verification) {
+          setVerifyState("failed");
+        } else if (verification.verified) {
+          setVerifyState("confirmed");
+          setTimeout(() => setVerifyState("idle"), 8000);
+        } else {
+          setVerifyState("stale");
+        }
+      }
     });
   }
 
@@ -269,8 +316,10 @@ export default function BrandWorkspace({
 
   function handleUnpublish() {
     startUnpublish(async () => {
-      await updatePageMeta(selectedPageId, { status: "draft" });
+      await unpublishPage(selectedPageId);
       setPageStatus("draft");
+      setPublishedVersionId(null);
+      setVerifyState("idle");
       bumpPreview(true);
     });
   }
@@ -295,7 +344,7 @@ export default function BrandWorkspace({
           <span className="text-xs font-bold text-charcoal">{brand.shortName}</span>
         </div>
 
-        {/* Page tabs — scroll if many pages */}
+        {/* Page tabs */}
         <div className="flex items-center gap-1 flex-1 overflow-x-auto min-w-0 scrollbar-none">
           {pages.map((p) => (
             <button
@@ -317,7 +366,6 @@ export default function BrandWorkspace({
         {/* Right controls */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
 
-          {/* Add Page */}
           <Link
             href={`/${brand.key}/pages`}
             className="flex-shrink-0 text-[11px] text-gray-500 hover:text-plum px-2 py-1.5 rounded-lg border border-dashed border-gray-300 hover:border-plum/40 transition-colors font-semibold"
@@ -326,7 +374,6 @@ export default function BrandWorkspace({
             + Page
           </Link>
 
-          {/* Add Blog Post */}
           <Link
             href={`/${brand.key}/blog`}
             className="flex-shrink-0 text-[11px] text-gray-500 hover:text-plum px-2 py-1.5 rounded-lg border border-dashed border-gray-300 hover:border-plum/40 transition-colors font-semibold"
@@ -335,7 +382,6 @@ export default function BrandWorkspace({
             + Post
           </Link>
 
-          {/* Add Event */}
           <Link
             href={`/${brand.key}/events`}
             className="flex-shrink-0 text-[11px] text-gray-500 hover:text-plum px-2 py-1.5 rounded-lg border border-dashed border-gray-300 hover:border-plum/40 transition-colors font-semibold"
@@ -344,7 +390,6 @@ export default function BrandWorkspace({
             + Event
           </Link>
 
-          {/* Divider */}
           <div className="w-px h-5 bg-gray-200 mx-0.5" />
 
           {/* Status badge */}
@@ -364,7 +409,7 @@ export default function BrandWorkspace({
             className="text-[11px] font-semibold text-gray-600 border border-gray-200 px-2.5 py-1.5 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
             title="Save a version snapshot"
           >
-            {draftSaved ? "Saved" : draftSaving ? "Saving…" : "Save Draft"}
+            {draftSaved ? "Saved" : draftSaving ? "Saving..." : "Save Draft"}
           </button>
 
           {/* History */}
@@ -376,10 +421,9 @@ export default function BrandWorkspace({
             History
           </Link>
 
-          {/* Divider */}
           <div className="w-px h-5 bg-gray-200 mx-0.5" />
 
-          {/* Edit Mode / Preview Mode toggle */}
+          {/* Edit Mode toggle */}
           <button
             type="button"
             onClick={() => toggleEditMode(!isEditMode)}
@@ -392,6 +436,34 @@ export default function BrandWorkspace({
             {isEditMode ? "Exit Edit Mode" : "Edit Sections"}
           </button>
 
+          {/* P1C: Verification indicator */}
+          {verifyState === "verifying" && (
+            <span className="text-[10px] font-semibold text-amber-600 animate-pulse">
+              Verifying...
+            </span>
+          )}
+          {verifyState === "confirmed" && (
+            <span
+              className="text-[10px] font-bold text-green-700"
+              title={publishedVersionId ? `Live version ${publishedVersionId}` : "Live"}
+            >
+              Live OK
+            </span>
+          )}
+          {verifyState === "stale" && (
+            <span
+              className="text-[10px] font-bold text-amber-600"
+              title="CDN may be stale - refresh in 30s"
+            >
+              Stale
+            </span>
+          )}
+          {verifyState === "failed" && (
+            <span className="text-[10px] font-bold text-red-600" title="Verification failed">
+              Verify err
+            </span>
+          )}
+
           {/* Publish / Unpublish */}
           {pageStatus !== "published" ? (
             <button
@@ -400,7 +472,7 @@ export default function BrandWorkspace({
               onClick={handlePublish}
               className="text-[11px] font-bold bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-60 transition-colors"
             >
-              {publishPending ? "Publishing…" : "Publish"}
+              {publishPending ? "Publishing..." : "Publish"}
             </button>
           ) : (
             <button
@@ -410,19 +482,18 @@ export default function BrandWorkspace({
               className="text-[11px] font-semibold border border-gray-200 text-gray-500 px-3 py-1.5 rounded-lg hover:border-red-200 hover:text-red-600 disabled:opacity-60 transition-colors"
               title="Move page back to draft"
             >
-              {unpublishPending ? "Reverting…" : "Unpublish"}
+              {unpublishPending ? "Reverting..." : "Unpublish"}
             </button>
           )}
         </div>
       </div>
 
-      {/* ══ Canvas + Inspector ══ */}
+      {/* Canvas + Inspector */}
       <div className="flex flex-1 overflow-hidden min-h-0">
 
         {/* Website canvas */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-gray-100">
 
-          {/* Click-to-edit hint — always visible so users know the canvas is interactive */}
           {!selectedSection && (
             <div className={`flex-shrink-0 py-1.5 px-4 text-center text-[11px] font-semibold select-none ${isEditMode ? "bg-plum/90 text-white" : "bg-amber-50 text-amber-700 border-b border-amber-200"}`}>
               {isEditMode
@@ -447,7 +518,7 @@ export default function BrandWorkspace({
               </div>
             ) : brand.key === "delphine" && !securePreviewUrl ? (
               <div className="absolute inset-0 flex items-center justify-center bg-white text-xs font-semibold text-gray-400">
-                Creating secure preview…
+                Creating secure preview...
               </div>
             ) : (
               <iframe
@@ -466,11 +537,10 @@ export default function BrandWorkspace({
           </div>
         </div>
 
-        {/* Inspector panel — slides in when editing a section ── */}
+        {/* Inspector panel */}
         {inspectorOpen && selectedSection && (
           <div className="w-80 flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col overflow-hidden">
 
-            {/* Inspector header */}
             <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 flex-shrink-0">
               <p className="text-xs font-bold text-charcoal">
                 {SECTION_TYPE_LABEL[selectedSection.type] ?? "Section"}
@@ -481,11 +551,10 @@ export default function BrandWorkspace({
                 className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-charcoal hover:bg-gray-50 text-sm transition-colors"
                 title="Close inspector"
               >
-                ✕
+                X
               </button>
             </div>
 
-            {/* Section fields */}
             <div className="flex-1 overflow-y-auto p-3">
               <SectionCard
                 section={selectedSection}
@@ -495,13 +564,12 @@ export default function BrandWorkspace({
               />
             </div>
 
-            {/* Bottom: open page editor */}
             <div className="flex-shrink-0 px-3 py-3 border-t border-gray-200 bg-white">
               <Link
                 href={`/${brand.key}/pages/${selectedPageId}`}
                 className="w-full flex items-center justify-center gap-2 text-xs font-semibold text-gray-500 hover:text-plum border border-gray-200 rounded-xl py-2.5 hover:bg-gray-50 transition-colors"
               >
-                Open Page Editor ↗
+                Open Page Editor
               </Link>
             </div>
           </div>

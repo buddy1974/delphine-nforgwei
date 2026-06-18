@@ -530,3 +530,201 @@ export async function restoreVersion(
   revalidatePath(`/pages/${pageId}`);
   return (fresh ?? []) as SectionRow[];
 }
+
+// ── P1C: Publish Lifecycle ──────────────────────────────────────────────────
+
+export interface PublishHistoryRow {
+  id: string;
+  page_id: string;
+  version_id: string;
+  action: "publish" | "rollback" | "unpublish";
+  triggered_by: string | null;
+  created_at: string;
+}
+
+/**
+ * Publish an exact page_versions snapshot.
+ * Sets pages.published_version_id, pages.status='published',
+ * inserts a publish_history row, and revalidates the public API cache.
+ *
+ * PRINCIPLE: Approve exact revision, never mutable draft.
+ */
+export async function publishVersion(
+  pageId: string,
+  versionId: string,
+  triggeredBy?: string
+): Promise<{ ok: true; publishedVersionId: string } | { error: string }> {
+  const db = createSupabaseAdminClient();
+
+  // Verify the version belongs to this page
+  const { data: version, error: verErr } = await db
+    .from("page_versions")
+    .select("id, page_id, status")
+    .eq("id", versionId)
+    .eq("page_id", pageId)
+    .single();
+
+  if (verErr || !version) return { error: "Version not found for this page." };
+
+  // Set published pointer and status atomically
+  const { error: updateErr } = await db
+    .from("pages")
+    .update({
+      published_version_id: versionId,
+      status: "published",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", pageId);
+
+  if (updateErr) return { error: updateErr.message };
+
+  // Audit log
+  await db.from("publish_history").insert({
+    page_id: pageId,
+    version_id: versionId,
+    action: "publish",
+    triggered_by: triggeredBy ?? null,
+  });
+
+  // Revalidate OS Next.js cache for all public API paths
+  revalidatePath("/api/public", "layout");
+
+  return { ok: true, publishedVersionId: versionId };
+}
+
+/**
+ * Roll back to a previous published snapshot.
+ * Only moves pages.published_version_id — NEVER touches the sections table.
+ * Draft state is completely untouched.
+ */
+export async function rollbackToVersion(
+  pageId: string,
+  versionId: string,
+  triggeredBy?: string
+): Promise<{ ok: true; publishedVersionId: string } | { error: string }> {
+  const db = createSupabaseAdminClient();
+
+  // Verify the version belongs to this page
+  const { data: version, error: verErr } = await db
+    .from("page_versions")
+    .select("id, page_id")
+    .eq("id", versionId)
+    .eq("page_id", pageId)
+    .single();
+
+  if (verErr || !version) return { error: "Version not found for this page." };
+
+  // Move the published pointer — sections table is NOT touched
+  const { error: updateErr } = await db
+    .from("pages")
+    .update({
+      published_version_id: versionId,
+      status: "published",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", pageId);
+
+  if (updateErr) return { error: updateErr.message };
+
+  // Audit log
+  await db.from("publish_history").insert({
+    page_id: pageId,
+    version_id: versionId,
+    action: "rollback",
+    triggered_by: triggeredBy ?? null,
+  });
+
+  // Revalidate OS Next.js cache
+  revalidatePath("/api/public", "layout");
+
+  return { ok: true, publishedVersionId: versionId };
+}
+
+/**
+ * Unpublish a page — clears published_version_id and sets status back to draft.
+ * Inserts an unpublish record into publish_history.
+ */
+export async function unpublishPage(
+  pageId: string,
+  triggeredBy?: string
+): Promise<void> {
+  const db = createSupabaseAdminClient();
+
+  // Get current published_version_id for the audit row
+  const { data: page } = await db
+    .from("pages")
+    .select("published_version_id")
+    .eq("id", pageId)
+    .single();
+
+  await db
+    .from("pages")
+    .update({
+      published_version_id: null,
+      status: "draft",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", pageId);
+
+  if (page?.published_version_id) {
+    await db.from("publish_history").insert({
+      page_id: pageId,
+      version_id: page.published_version_id,
+      action: "unpublish",
+      triggered_by: triggeredBy ?? null,
+    });
+  }
+
+  revalidatePath("/api/public", "layout");
+}
+
+/**
+ * Verify that the public API is serving the expected published version.
+ * Calls the OS public API internally and compares publishedVersionId.
+ *
+ * Returns:
+ *   { verified: true }  — live content matches expectedVersionId
+ *   { verified: false, liveVersionId } — mismatch or stale cache
+ *   { error }           — API call failed
+ */
+export async function verifyPublishedVersion(
+  brand: string,
+  slug: string,
+  expectedVersionId: string
+): Promise<
+  | { verified: true }
+  | { verified: false; liveVersionId: string | null }
+  | { error: string }
+> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3100";
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "/os";
+    const url = `${baseUrl}${basePath}/api/public/${brand}/${slug}?_v=${Date.now()}`;
+
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return { error: `Public API returned ${res.status}` };
+
+    const data = (await res.json()) as { publishedVersionId?: string | null };
+    const liveVersionId = data.publishedVersionId ?? null;
+
+    if (liveVersionId === expectedVersionId) return { verified: true };
+    return { verified: false, liveVersionId };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Verification fetch failed." };
+  }
+}
+
+/** List publish history for a page, newest first. */
+export async function listPublishHistory(pageId: string): Promise<PublishHistoryRow[]> {
+  const db = createSupabaseAdminClient();
+  const { data, error } = await db
+    .from("publish_history")
+    .select("id, page_id, version_id, action, triggered_by, created_at")
+    .eq("page_id", pageId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PublishHistoryRow[];
+}

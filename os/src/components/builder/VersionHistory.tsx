@@ -5,6 +5,7 @@ import {
   listVersions,
   saveVersion,
   restoreVersion,
+  rollbackToVersion,
   type VersionRow,
 } from "@/app/(shell)/pages/actions";
 import type { SectionRow } from "@/lib/db/pages";
@@ -12,16 +13,24 @@ import type { SectionRow } from "@/lib/db/pages";
 interface VersionHistoryProps {
   pageId: string;
   pageTitle: string;
+  pageSlug?: string;
+  pageBrand?: string;
   currentSections: SectionRow[];
+  publishedVersionId?: string | null;
   onRestored: (sections: SectionRow[]) => void;
+  onPublished?: (versionId: string) => void;
   onClose: () => void;
 }
 
 export default function VersionHistory({
   pageId,
   pageTitle,
+  pageSlug,
+  pageBrand,
   currentSections,
+  publishedVersionId,
   onRestored,
+  onPublished,
   onClose,
 }: VersionHistoryProps) {
   const [versions, setVersions] = useState<VersionRow[]>([]);
@@ -29,12 +38,14 @@ export default function VersionHistory({
   const [label, setLabel] = useState("");
   const [savePending, startSave] = useTransition();
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState<string | null>(null);
   const [compareId, setCompareId] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
     const rows = await listVersions(pageId);
-    setVersions(rows);
+    // Filter out auto-generated "Secure preview" sessions — not publishable
+    setVersions(rows.filter((v) => v.label !== "Secure preview"));
     setLoading(false);
   }
 
@@ -50,11 +61,24 @@ export default function VersionHistory({
   }
 
   async function handleRestore(versionId: string) {
-    if (!confirm("Restore this version? Current sections will be replaced.")) return;
+    if (!confirm("Restore this version as draft? Current sections will be replaced. Published content is NOT changed.")) return;
     setRestoring(versionId);
     const sections = await restoreVersion(versionId, pageId);
     setRestoring(null);
     onRestored(sections);
+    onClose();
+  }
+
+  async function handlePublishVersion(versionId: string) {
+    if (!confirm("Publish this exact version? This will become the live public content immediately.")) return;
+    setPublishing(versionId);
+    const result = await rollbackToVersion(pageId, versionId);
+    setPublishing(null);
+    if ("error" in result) {
+      alert(`Publish failed: ${result.error}`);
+      return;
+    }
+    onPublished?.(result.publishedVersionId);
     onClose();
   }
 
@@ -152,18 +176,32 @@ export default function VersionHistory({
             const sections = v.sections as SectionRow[];
             const date = new Date(v.created_at);
             const isComparing = compareId === v.id;
+            const isLive = v.id === publishedVersionId;
+            const isRestoring = restoring === v.id;
+            const isPublishing = publishing === v.id;
             return (
               <div
                 key={v.id}
                 className={`px-5 py-4 border-b border-gray-100 last:border-0 ${
-                  isComparing ? "bg-amber-50" : "hover:bg-gray-50"
+                  isLive
+                    ? "bg-green-50 border-l-2 border-l-green-500"
+                    : isComparing
+                    ? "bg-amber-50"
+                    : "hover:bg-gray-50"
                 } transition-colors`}
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-charcoal truncate">
-                      {v.label ?? "Snapshot"}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-charcoal truncate">
+                        {v.label ?? "Snapshot"}
+                      </p>
+                      {isLive && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 flex-shrink-0">
+                          LIVE
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-gray-400">
                       {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </p>
@@ -177,7 +215,8 @@ export default function VersionHistory({
                   {sections.length} section{sections.length !== 1 ? "s" : ""}
                 </p>
 
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 flex-wrap">
+                  {/* Compare — always available */}
                   <button
                     type="button"
                     onClick={() => setCompareId(isComparing ? null : v.id)}
@@ -189,14 +228,30 @@ export default function VersionHistory({
                   >
                     {isComparing ? "Comparing" : "Compare"}
                   </button>
+
+                  {/* Restore Draft — mutates draft sections, does NOT change live content */}
                   <button
                     type="button"
-                    disabled={restoring === v.id}
+                    disabled={isRestoring}
                     onClick={() => handleRestore(v.id)}
-                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-plum/30 text-plum hover:bg-plum/5 disabled:opacity-50 transition-all"
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:border-plum/40 hover:text-plum disabled:opacity-50 transition-all"
+                    title="Restore as draft — live content is unchanged"
                   >
-                    {restoring === v.id ? "Restoring…" : "Restore"}
+                    {isRestoring ? "Restoring…" : "Restore Draft"}
                   </button>
+
+                  {/* Publish Version — moves published_version_id pointer, no draft mutation */}
+                  {!isLive && (
+                    <button
+                      type="button"
+                      disabled={isPublishing}
+                      onClick={() => handlePublishVersion(v.id)}
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-all"
+                      title="Publish this exact version — becomes live immediately"
+                    >
+                      {isPublishing ? "Publishing…" : "Publish Version"}
+                    </button>
+                  )}
                 </div>
               </div>
             );

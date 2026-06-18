@@ -1,0 +1,177 @@
+READ CLAUDE.md FIRST.
+
+Files to read first:
+1. C:\Users\loneb\Documents\ai-software-dev\projects\delphine.nforgwei\CLAUDE.md
+2. C:\Users\loneb\Documents\AI-OPERATING-SYSTEM\MASTER-AI-OPERATING-SYSTEM.md
+
+Read docs:
+- docs/decision-log.md
+- docs/change-log.md
+- docs/known-risks.md
+
+PREFLIGHT NOTE (already verified by the Opus audit):
+- repository-map.md, data-ownership.md, production-readiness.md are MISSING.
+- product-brief.md, architecture.md, workflow-map.md are EMPTY (0 bytes).
+- Do NOT block P1D to regenerate these. Proceed on the populated logs (decision-log,
+  change-log, known-risks) plus the source code. You may note the gap in the handover.
+
+MODE: IMPLEMENTATION
+PHASE: P1D — DELPHINE EDIT BRIDGE STABILIZATION
+SCOPE: DELPHINE ONLY.
+
+DO NOT TOUCH:
+- P1C publish lifecycle, pages.published_version_id, page_versions, publish_history, rollback logic
+- preview_sessions, preview token security, CORS security, applied migrations
+- SMCC, E-Woman, DRIMP, H8, CRM, Email, WhatsApp, Google integrations, AI agents
+
+RISK-001 (MANDATORY): Files inside Next.js route groups with parentheses
+— os/src/app/(shell)/... and os/src/app/(preview)/... — CANNOT be edited with
+Edit/Write on Windows (silent truncation). Any change to those files must be written
+via the python3 bash pattern. Note: os/src/components/BrandWorkspace.tsx is NOT in a
+paren group and is safe to Edit normally.
+
+==================================================
+CURRENT STATE
+
+P1B closed. P1C implemented and statically verified.
+Delphine preview renders the real public website correctly.
+Problem: click-to-edit does nothing inside the Delphine iframe.
+
+Opus diagnosis (CONFIRMED — do not re-litigate):
+The real Delphine preview path (src/pages/OsPreview.tsx) has only PARTIAL bridge support.
+The generic preview (os/src/app/(preview)/pages/[id]/preview/page.tsx) has the FULL bridge.
+
+ROOT CAUSE — src/pages/OsPreview.tsx currently:
+- renders real Delphine components
+- posts SECTION_CLICK only
+- uses targetOrigin derived from VITE_OS_URL (build-time)
+- has NO EDIT_MODE listener
+- has NO HIGHLIGHT_SECTION listener
+- emits NO FIELD_CHANGE
+- has NO PREVIEW_READY handshake
+- real section components lack data-field / data-editable
+- links/buttons can navigate the iframe instead of selecting sections
+
+Note: section IDs are healthy and preserved end-to-end. Do NOT change DB/schema.
+
+==================================================
+TASK 1 — PROTECT CURRENT WORK
+Run: git status
+If uncommitted files exist, checkpoint:
+  git add .
+  git commit -m "checkpoint before P1D edit bridge stabilization"
+Do not continue unless work is protected. No push.
+
+==================================================
+TASK 2 — AUDIT CURRENT BRIDGE
+Read src/pages/OsPreview.tsx and compare with
+os/src/app/(preview)/pages/[id]/preview/page.tsx.
+Use the generic BRIDGE_SCRIPT as the reference contract.
+Do not modify DB / schema / security.
+
+==================================================
+TASK 3 — FIX PARENT-ORIGIN HANDSHAKE (BIDIRECTIONAL — read carefully)
+
+Context: Outbound messages FROM BrandWorkspace already target previewOriginRef
+(derived from DELPHINE_PUBLIC_SITE_URL) and are correct. The bug is the INBOUND leg:
+OsPreview posts back to new URL(VITE_OS_URL).origin, which silently drops if it does
+not exactly equal the real parent origin. Fix that leg via a handshake:
+
+1. BrandWorkspace, on iframe load (onIframeLoad), sends:
+   { type: "PREVIEW_INIT", origin: window.location.origin, editMode: currentEditMode }
+2. OsPreview listens for PREVIEW_INIT and stores the TRUSTED parent origin from
+   event.origin (validate it equals the configured OS origin; keep VITE_OS_URL origin
+   as fallback only).
+3. OsPreview posts ALL subsequent SECTION_CLICK and FIELD_CHANGE to that stored parent
+   origin (not to VITE_OS_URL).
+4. OsPreview emits { type: "PREVIEW_READY" } back to the parent after init.
+5. BrandWorkspace optionally records PREVIEW_READY for diagnostics.
+
+VERIFY: BrandWorkspace's existing handleMessage origin guard
+(e.origin === window.location.origin || e.origin === previewOriginRef.current)
+must accept PREVIEW_READY — confirm previewOriginRef is set before the iframe can reply.
+
+==================================================
+TASK 4 — PORT FULL BRIDGE CONTRACT INTO OSPREVIEW
+In src/pages/OsPreview.tsx implement:
+1. SECTION_CLICK (outbound) — keep.
+2. EDIT_MODE (inbound): toggle edit mode; set contentEditable on [data-editable];
+   add/remove an editing class/attribute.
+3. HIGHLIGHT_SECTION (inbound): scroll to the selected [data-section-id] and highlight it visibly.
+4. FIELD_CHANGE (outbound): listen for input on editable fields, debounce (~600ms), send
+   { type: "FIELD_CHANGE", sectionId, field, value }.
+5. Link/button guard: in edit mode, preventDefault on links/buttons so section selection
+   happens instead of iframe navigation.
+
+CAUTION (contentEditable + framer-motion): Hero/About and others use motion. Do NOT make
+animated/motion wrapper nodes contentEditable — attach data-editable only to LEAF text
+elements (the h1/p that hold title/subtitle/body). Otherwise motion re-renders will wipe
+edits or shift layout. Keep editable leaves outside motion-controlled transform nodes.
+
+==================================================
+TASK 5 — ADD EDIT ATTRIBUTES TO REAL DELPHINE SECTIONS
+Files:
+  src/components/sections/HeroSection.tsx
+  src/components/sections/AboutSection.tsx
+  src/components/sections/ProgramsSection.tsx
+  src/components/sections/BooksSection.tsx
+  src/components/sections/EventsSection.tsx
+  src/components/sections/GallerySection.tsx
+  src/components/sections/ContactSection.tsx
+  src/components/sections/TransformationSection.tsx
+  src/components/sections/EcosystemSection.tsx
+  src/components/sections/TestimonialsSection.tsx
+
+Pattern — wrapper:
+  data-section-id={sectionId} data-section-type="hero"
+Pattern — editable leaf text fields:
+  data-editable="true" data-field="title"
+  data-editable="true" data-field="subtitle"
+  data-editable="true" data-field="body"
+
+Rules:
+- ONLY add attributes/classes. Do NOT change visual design, content, or layout.
+- Props may need optional: sectionId?: string; sectionType?: string.
+- Attach data-editable to leaf text nodes only (see Task 4 caution).
+
+==================================================
+TASK 6 — UPDATE OSPREVIEW SECTION RENDERING
+When OsPreview renders the real section components, pass:
+  sectionId={section.id} sectionType={section.type}
+plus the existing mapped field props.
+Keep the generic renderer as fallback ONLY. Do not delete it.
+
+==================================================
+TASK 7 — VERIFY (BUILD)
+Root:  npm run build
+OS:    cd os && npx tsc --noEmit && npm run build
+npm run build may time out in the sandbox (known RISK-002) — report honestly if so.
+At MINIMUM, npx tsc --noEmit must pass with zero errors in both root and os.
+
+==================================================
+TASK 8 — FUNCTIONAL CHECK (live or local; verify on the ACTUAL OS origin)
+1. Delphine preview still renders the real purple website.
+2. Click Hero section -> inspector opens.
+3. Toggle Edit Mode -> editable text fields become editable.
+4. Edit title/subtitle -> FIELD_CHANGE fires (autosave).
+5. Selected section shows a visible highlight.
+6. Click a CTA/button in edit mode -> does NOT navigate the iframe.
+7. P1C publish UI still present and functional.
+8. P1B token preview still works.
+9. SMCC / E-Woman / DRIMP unchanged (still generic renderer).
+
+==================================================
+OUTPUT REQUIRED
+1. Files changed.
+2. Bridge changes.
+3. Parent-origin handshake implemented.
+4. Components updated with edit attributes.
+5. Build results.
+6. Functional verification.
+7. Known limitations.
+8. Whether Delphine click-to-edit is restored.
+
+Update docs/change-log.md and docs/decision-log.md per the MEMORY RULE.
+Material changes require Marcel's approval before commit beyond the Task-1 checkpoint.
+
+STOP. DO NOT START H8. DO NOT TOUCH OTHER BRANDS.
