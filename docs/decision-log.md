@@ -1,5 +1,19 @@
 # Decision Log
 
+## P1D.8 — Save Draft False Success: Root Cause (2026-06-21)
+
+### Decision: Use runSave() wrapper for saveVersion; gate setDraftSaved on result.ok
+
+**Root cause:** `saveVersion` returned `void`. `handleSaveDraft` called it with `await` and discarded the result — there was no result to check. The `setDraftSaved(true)` call ran immediately after `await saveVersion(...)` with no condition. Any server-side failure (503, DB error, thrown exception) was invisible at the call site.
+
+**Fix:** Changed `saveVersion` to return `{ ok: true } | { error: string }`. Wrapped in `runSave()` so the result is `SaveResult = { ok: true } | { ok: false; error: string }` — the same contract already established for `updateSection`, `updateEvent`, `updatePost`. `setDraftSaved(true)` now only fires when `result.ok === true`.
+
+**Why runSave() not direct access?** The old-style union `{ ok: true } | { error: string }` has no `ok` property on the `{ error }` branch — TypeScript raises TS2339. `runSave()` normalises both branches to carry `ok`, eliminating the type error and providing exception catching as a bonus.
+
+**Consequence:** Save Draft button is fully truthful. The pattern is now consistent across all write paths: AutoField inspector, BrandWorkspace FIELD_CHANGE canvas, PageEditor FIELD_CHANGE canvas, Save Draft, Publish snapshot.
+
+---
+
 ## P1D.9 — Save Truthfulness Closure (2026-06-21)
 
 ### Decision: wrap saveVersion in runSave(); gate all draft/publish paths on result.ok; harden updateSection with phantom-write detection
@@ -430,4 +444,38 @@ save succeeded; (2) inline edits were not visible in the canvas without a manual
 **Consequence:** Edit title → Saving... → Saved ✓ → canvas updates automatically.
 HTTP 503 → Save failed (persists). Delphine editing experience is production-ready
 pending human functional verification in a deployed browser session.
+
+
+---
+
+## P1F Extended — App Router Remount Audit + Next-Action Leg Tags
+
+**Date:** 2026-06-21
+
+**Context:** Extended P1F spec required auditing whether Server Action failures cause
+App Router remounts, and whether `Next-Action` header could be captured client-side
+to distinguish which action a 503 came from.
+
+**Decisions:**
+
+1. **No ref-based persistence needed for BrandWorkspace/PageEditor state.**
+   Audit confirmed: `updateSection`, `saveVersion`, and `createPreviewSession` do NOT
+   call `revalidatePath`. `publishVersion` revalidates `/api/public` only — not the
+   shell route. App Router remounts are not a failure mode for editor state.
+
+2. **`Next-Action` header is not capturable from user-land JS.**
+   React's Server Action transport sets the `Next-Action` header on outgoing fetch
+   requests internally. There is no documented hook to read these headers without
+   monkey-patching `globalThis.fetch`. Rejected: fragile, maintenance burden, not
+   worth the benefit given that `leg` tags already identify the failure source.
+   Header IS visible in browser DevTools Network tab for manual debugging.
+
+3. **`leg` tag pattern extended to all save paths.**
+   Existing `leg: "session"` from P1F preview retry loop is the correct model.
+   Applied `leg: "updateSection"` and `leg: "saveVersion"` to the remaining save paths.
+   All three paths now emit `[P1F] { leg, status: "attempt" | "ok" | "failed" }` entries
+   that can be correlated with the DevTools Network request by timestamp.
+
+**Consequence:** Full diagnostic traceability across all save and preview transport legs.
+Any 503 in production can be attributed to the correct action via the `leg` field.
 

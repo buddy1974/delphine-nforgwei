@@ -1,5 +1,38 @@
 # Change Log
 
+## P1D.8 — Save Draft Button Truthfulness — 2026-06-21
+
+### Audit Result
+Browser test confirmed:
+- Save Draft normal success: PASS
+- Save Draft forced 503: FAIL (button showed "Saved" despite failed POST)
+- PageEditor inline save: PASS (already fixed in P1D.6/P1D.9)
+
+### Root Cause
+`handleSaveDraft` in `BrandWorkspace.tsx` called `await saveVersion(...)` with no result check.
+`saveVersion` returned `Promise<void>` and swallowed all DB/transport errors silently.
+`setDraftSaved(true)` ran unconditionally in the `try` block regardless of actual outcome.
+
+### Fix
+Implemented as part of P1D.9 (same session):
+
+**`os/src/app/(shell)/pages/actions.ts`** — `saveVersion` return type changed from `Promise<void>` to `Promise<{ ok: true } | { error: string }>`. DB insert error now captured and returned.
+
+**`os/src/components/BrandWorkspace.tsx`** — `handleSaveDraft`:
+- Wrapped `saveVersion` in `runSave()` (normalises to `SaveResult` with `ok` on both branches)
+- `setDraftSaved(true)` gated on `result.ok === true`
+- On failure: `setDraftSaveError(true)`, button shows `"Draft failed"`, auto-clears after 3 s
+- Added `draftSaveError` state
+
+### Validation
+- `tsc -b`: PASS
+- `cd os && tsc --noEmit`: PASS
+
+### Status
+COMPLETE. Save Draft button is now truthful. No false "Saved ✓" on failure.
+
+---
+
 ## P1D.9 — Remaining Save Truthfulness Fixes — 2026-06-21
 
 ### Context
@@ -700,4 +733,73 @@ Delphine only. One file changed. P1B/P1C/P1D/P1D.1/P1E untouched. H8 not started
 ### Functional Verification Required
 
 Edit title → Saving... → Saved ✓ → canvas updates automatically. Simulate 503 → Save failed (not cleared). Human must verify in deployed browser session.
+
+
+---
+
+## P1F — Extended Diagnostics: App Router Remount Audit + Next-Action Leg Tags
+
+**Date:** 2026-06-21
+
+### Problem
+
+New P1F spec required two additional audit tasks:
+1. **Task 5** — Determine whether Server Action 503s or `revalidatePath` calls cause
+   App Router remounts that erase `inlineSaveState`, `draftSaveError`, `selectedSection`,
+   or `editMode` in BrandWorkspace/PageEditor.
+2. **Task 6** — Distinguish `updateSection()` vs `createPreviewSession()` failures in
+   diagnostic logs. `Next-Action` header currently logged as `"unavailable from client path"`.
+
+### Task 5 Findings — App Router Remount Audit
+
+Audited all Server Actions called from the BrandWorkspace/PageEditor save flows:
+
+| Action | `revalidatePath` call | Remount risk |
+|---|---|---|
+| `updateSection` | None | None |
+| `saveVersion` | None | None |
+| `createPreviewSession` | None | None |
+| `publishVersion` | `revalidatePath("/api/public", "layout")` | Revalidates public API route only — NOT the shell route where BrandWorkspace lives |
+| `createPage`, `updatePageMeta`, `addSection` | `revalidatePath("/pages")` | Affects pages list route only |
+
+**Conclusion:** No App Router remounts affect BrandWorkspace or PageEditor state.
+`inlineSaveState`, `draftSaveError`, `selectedSection`, and `editMode` are preserved
+across all save and preview operations. No ref-based persistence required.
+
+### Task 6 Implementation — Next-Action Leg Tags
+
+`Next-Action` header (set on outgoing Server Action POST requests) is not capturable
+from user-land JavaScript — React's Server Action transport uses `fetch` internally with
+no hook to read outgoing request headers without monkey-patching `globalThis.fetch`.
+The header IS visible in the browser's DevTools Network tab under the POST request headers.
+
+**Implementation:** Added `console.debug("[P1F]", { leg: ..., status: ... })` tags to
+all save paths, matching the existing `leg: "session"` pattern from the P1F preview retry:
+
+- `PageEditor.tsx` FIELD_CHANGE handler: `leg: "updateSection"` — attempt / ok / failed
+- `BrandWorkspace.tsx` handleSaveDraft: `leg: "saveVersion"` — attempt / ok / failed
+- Existing preview retry already tagged: `leg: "session"`
+
+All three legs now produce consistent structured diagnostic entries in the browser console.
+Any 503 can be attributed to the correct action by checking the `leg` field in the log.
+
+### Changes
+
+- `os/src/components/builder/PageEditor.tsx` — added `[P1F]` debug entries in FIELD_CHANGE handler
+- `os/src/components/BrandWorkspace.tsx` — added `[P1F]` debug entries in handleSaveDraft
+
+### Typecheck
+
+- `npx tsc --noEmit` (os): **EXIT 0**
+
+### Scope
+
+Delphine only. Two component files. No logic changes — diagnostic instrumentation only.
+P1D save contract unchanged. Preview state machine unchanged. No other brands touched.
+
+### Functional Verification Required
+
+Open browser DevTools console, make an edit → confirm `[P1F] { leg: "updateSection", status: "attempt" }` appears.
+Click Save Draft → confirm `[P1F] { leg: "saveVersion", status: "attempt" }` appears.
+Confirm `status: "ok"` on success, `status: "failed"` on forced 503.
 

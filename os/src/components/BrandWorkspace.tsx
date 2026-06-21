@@ -430,14 +430,18 @@ export default function BrandWorkspace({
     setDraftSaveError(false);
     try {
       const currentPage = pages.find((p) => p.id === selectedPageId);
+      // P1F T6: leg:"saveVersion" — Next-Action header visible in DevTools Network (outgoing POST)
+      console.debug("[P1F]", { leg: "saveVersion", status: "attempt", timestamp: Date.now(), pageId: selectedPageId });
       const result = await runSave(() =>
         saveVersion(selectedPageId, currentPage?.title ?? "Draft", sections)
       );
       if (result.ok) {
+        console.debug("[P1F]", { leg: "saveVersion", status: "ok" });
         setDraftSaved(true);
         setTimeout(() => setDraftSaved(false), 2500);
       } else {
         console.error("[P1D.9] Save Draft failed:", result.error);
+        console.debug("[P1F]", { leg: "saveVersion", status: "failed", error: result.error });
         setDraftSaveError(true);
         setTimeout(() => setDraftSaveError(false), 3000);
       }

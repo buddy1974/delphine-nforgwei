@@ -198,15 +198,19 @@ export default function PageEditor({
         if (inlineSaveTimers.current[key]) clearTimeout(inlineSaveTimers.current[key]);
         inlineSaveTimers.current[key] = setTimeout(async () => {
           // P1D.9: runSave + seq guard + state machine — mirrors BrandWorkspace
+          // P1F T6: leg:"updateSection" — Next-Action header visible in DevTools Network (outgoing POST)
           const seq = (latestSaveSeq.current += 1);
           setInlineSaveState("saving");
+          console.debug("[P1F]", { leg: "updateSection", status: "attempt", seq, timestamp: Date.now(), sectionId, field });
           const result = await runSave(() =>
             updateSection(sectionId, { [field as keyof SectionPatch]: value })
           );
           if (seq !== latestSaveSeq.current) return;
           if (!result.ok) {
+            console.debug("[P1F]", { leg: "updateSection", status: "failed", seq, error: result.error });
             setInlineSaveState("failed");
           } else {
+            console.debug("[P1F]", { leg: "updateSection", status: "ok", seq });
             setInlineSaveState("saved");
             if (inlineSaveClearTimer.current) clearTimeout(inlineSaveClearTimer.current);
             inlineSaveClearTimer.current = setTimeout(() => {
