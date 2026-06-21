@@ -479,3 +479,40 @@ to distinguish which action a 503 came from.
 **Consequence:** Full diagnostic traceability across all save and preview transport legs.
 Any 503 in production can be attributed to the correct action via the `leg` field.
 
+
+---
+
+## P1F.1 — console.debug → console.info + Inspector Leg Coverage
+
+**Date:** 2026-06-21
+
+**Context:** Opus audit found that all `[P1F]` diagnostics used `console.debug`, which
+is hidden by default in Chrome/Edge DevTools. Inspector save path had no leg tag.
+
+**Decisions:**
+
+1. **Use `console.info` for all [P1F] diagnostics.**
+   `console.debug` requires "Verbose" level in Chrome DevTools. In production debugging,
+   the default console filter ("Default levels") hides debug messages. `console.info` is
+   visible at all default filter settings. Centralised via `logP1F()` in `diag.ts` so
+   the level can be changed in one place if needed.
+
+2. **Create `os/src/lib/diag.ts` as a thin wrapper.**
+   Rationale: (a) single place to change log level; (b) inline safety documentation
+   (no tokens/content/PII); (c) consistent call pattern across all legs.
+   Alternative (inline `console.info` at each callsite) rejected — no single enforcement
+   point for the safety rules.
+
+3. **Tag inspector save path as `leg: "updateSection-inspector"`.**
+   Separate from canvas FIELD_CHANGE `leg: "updateSection"` because the two paths have
+   different debounce behaviour and error visibility. Inspector saves are synchronous and
+   user-initiated (button click via SectionCard); FIELD_CHANGE saves are debounced 700ms.
+   Distinguishing them in logs allows attribution of a 503 to the correct path.
+   Field values (patch content) are NOT logged — only `Object.keys(patch)` for field names.
+
+4. **verifyPublishedVersion operator-precedence bug is out of scope for P1F.1.**
+   Requires separate ticket and approval. No changes to publish or verify flows here.
+
+**Consequence:** All five diagnostic legs are now visible in default DevTools console.
+Inspector saves are independently traceable. No logic changed.
+

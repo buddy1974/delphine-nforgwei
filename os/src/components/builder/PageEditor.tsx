@@ -54,6 +54,7 @@ import {
   reorderRowChildren,
 } from "@/app/(shell)/pages/actions";
 import { runSave } from "@/lib/save-result";
+import { logP1F } from "@/lib/diag";
 
 /* ── Drag overlay cards ──────────────────────────────────────── */
 function OverlayCard({ section, index }: { section: SectionRow; index: number }) {
@@ -201,16 +202,16 @@ export default function PageEditor({
           // P1F T6: leg:"updateSection" — Next-Action header visible in DevTools Network (outgoing POST)
           const seq = (latestSaveSeq.current += 1);
           setInlineSaveState("saving");
-          console.debug("[P1F]", { leg: "updateSection", status: "attempt", seq, timestamp: Date.now(), sectionId, field });
+          logP1F({ leg: "updateSection", status: "attempt", seq, timestamp: Date.now(), sectionId, field });
           const result = await runSave(() =>
             updateSection(sectionId, { [field as keyof SectionPatch]: value })
           );
           if (seq !== latestSaveSeq.current) return;
           if (!result.ok) {
-            console.debug("[P1F]", { leg: "updateSection", status: "failed", seq, error: result.error });
+            logP1F({ leg: "updateSection", status: "failed", seq, error: result.error });
             setInlineSaveState("failed");
           } else {
-            console.debug("[P1F]", { leg: "updateSection", status: "ok", seq });
+            logP1F({ leg: "updateSection", status: "ok", seq });
             setInlineSaveState("saved");
             if (inlineSaveClearTimer.current) clearTimeout(inlineSaveClearTimer.current);
             inlineSaveClearTimer.current = setTimeout(() => {
@@ -236,8 +237,15 @@ export default function PageEditor({
   // P1D.6: use runSave — strict ok===true detection, never throws
   async function handleSave(id: string, patch: SectionPatch) {
     setSections((prev) => prev.map((s) => s.id === id ? { ...s, ...patch } : s));
+    // P1F.1: inspector save diagnostic
+    logP1F({ leg: "updateSection-inspector", status: "attempt", timestamp: Date.now(), pageId: page.id, sectionId: id, fields: Object.keys(patch) });
     const result = await runSave(() => updateSection(id, patch));
-    if (result.ok) bumpPreview();
+    if (result.ok) {
+      logP1F({ leg: "updateSection-inspector", status: "ok", pageId: page.id, sectionId: id });
+      bumpPreview();
+    } else {
+      logP1F({ leg: "updateSection-inspector", status: "failed", pageId: page.id, sectionId: id, error: result.error });
+    }
     return result;
   }
   async function handleAdd(type: SectionType) {

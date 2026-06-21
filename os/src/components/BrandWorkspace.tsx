@@ -25,6 +25,7 @@ import { SECTION_TYPE_LABEL } from "@/lib/db/pages";
 import { createPreviewSession } from "@/app/(shell)/preview/actions";
 import type { PreviewInboundMsg } from "@/lib/preview-bridge";
 import { runSave } from "@/lib/save-result";
+import { logP1F } from "@/lib/diag";
 
 /* ── postMessage types from preview iframe (shared P1E contract) ── */
 type PreviewMsg = PreviewInboundMsg;
@@ -283,7 +284,7 @@ export default function BrandWorkspace({
 
         const ts = Date.now();
         // P1F: structured diagnostic — no PII
-        console.debug("[P1F]", {
+        logP1F({
           leg: "session",
           status: "attempt",
           attempt,
@@ -313,7 +314,7 @@ export default function BrandWorkspace({
           if (!active) return;
 
           if ("error" in result) {
-            console.debug("[P1F]", {
+            logP1F({
               leg: "session",
               status: "error",
               attempt,
@@ -333,7 +334,7 @@ export default function BrandWorkspace({
             lastError = result.error;
           } else {
             // Success — swap iframe to new session
-            console.debug("[P1F]", {
+            logP1F({
               leg: "session",
               status: "ok",
               attempt,
@@ -352,7 +353,7 @@ export default function BrandWorkspace({
         } catch (err) {
           if (!active) return;
           const errMsg = err instanceof Error ? err.message : "Transport failure";
-          console.debug("[P1F]", {
+          logP1F({
             leg: "session",
             status: "thrown",
             attempt,
@@ -367,7 +368,7 @@ export default function BrandWorkspace({
 
       // All attempts exhausted
       if (!active) return;
-      console.debug("[P1F]", {
+      logP1F({
         leg: "session",
         status: "exhausted",
         timestamp: Date.now(),
@@ -410,8 +411,15 @@ export default function BrandWorkspace({
     setSections((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...patch } : s))
     );
+    // P1F.1: inspector save diagnostic
+    logP1F({ leg: "updateSection-inspector", status: "attempt", timestamp: Date.now(), pageId: selectedPageId, sectionId: id, fields: Object.keys(patch) });
     const result = await runSave(() => updateSection(id, patch));
-    if (result.ok) bumpPreview();
+    if (result.ok) {
+      logP1F({ leg: "updateSection-inspector", status: "ok", pageId: selectedPageId, sectionId: id });
+      bumpPreview();
+    } else {
+      logP1F({ leg: "updateSection-inspector", status: "failed", pageId: selectedPageId, sectionId: id, error: result.error });
+    }
     return result;
   }
 
@@ -431,17 +439,17 @@ export default function BrandWorkspace({
     try {
       const currentPage = pages.find((p) => p.id === selectedPageId);
       // P1F T6: leg:"saveVersion" — Next-Action header visible in DevTools Network (outgoing POST)
-      console.debug("[P1F]", { leg: "saveVersion", status: "attempt", timestamp: Date.now(), pageId: selectedPageId });
+      logP1F({ leg: "saveVersion", status: "attempt", timestamp: Date.now(), pageId: selectedPageId });
       const result = await runSave(() =>
         saveVersion(selectedPageId, currentPage?.title ?? "Draft", sections)
       );
       if (result.ok) {
-        console.debug("[P1F]", { leg: "saveVersion", status: "ok" });
+        logP1F({ leg: "saveVersion", status: "ok" });
         setDraftSaved(true);
         setTimeout(() => setDraftSaved(false), 2500);
       } else {
         console.error("[P1D.9] Save Draft failed:", result.error);
-        console.debug("[P1F]", { leg: "saveVersion", status: "failed", error: result.error });
+        logP1F({ leg: "saveVersion", status: "failed", error: result.error });
         setDraftSaveError(true);
         setTimeout(() => setDraftSaveError(false), 3000);
       }

@@ -803,3 +803,73 @@ Open browser DevTools console, make an edit → confirm `[P1F] { leg: "updateSec
 Click Save Draft → confirm `[P1F] { leg: "saveVersion", status: "attempt" }` appears.
 Confirm `status: "ok"` on success, `status: "failed"` on forced 503.
 
+
+---
+
+## P1F.1 — Diagnostic Visibility + Inspector Leg Tags
+
+**Date:** 2026-06-21
+
+### Problem
+
+Two diagnostic gaps identified by Opus audit:
+1. All `[P1F]` diagnostic calls used `console.debug`, which is hidden by default in Chrome/Edge
+   unless "Verbose" is enabled in DevTools console filter. Real 503s after "Saved ✓" were silent.
+2. The inspector save path (`handleSave` → `runSave(updateSection)`) had no `[P1F]` tag,
+   making it impossible to distinguish inspector-triggered saves from canvas FIELD_CHANGE saves.
+
+### Changes
+
+**`os/src/lib/diag.ts`** (new file):
+- `logP1F(event)` helper using `console.info` — visible by default in all browsers
+- Safety rules documented inline: never log tokens, section content, PII
+- Safe fields: leg, status, ids, field keys, error strings, seq, timestamps
+
+**`os/src/components/BrandWorkspace.tsx`**:
+- Added `import { logP1F } from "@/lib/diag"`
+- Replaced 8× `console.debug("[P1F]", {...})` → `logP1F({...})`
+- Added `leg: "updateSection-inspector"` tags to `handleSave` (attempt / ok / failed)
+  - Logs: `pageId: selectedPageId`, `sectionId: id`, `fields: Object.keys(patch)`
+  - Does NOT log patch values (section content)
+
+**`os/src/components/builder/PageEditor.tsx`**:
+- Added `import { logP1F } from "@/lib/diag"`
+- Replaced 3× `console.debug("[P1F]", {...})` → `logP1F({...})`
+- Added `leg: "updateSection-inspector"` tags to `handleSave` (attempt / ok / failed)
+  - Logs: `pageId: page.id`, `sectionId: id`, `fields: Object.keys(patch)`
+
+### Diagnostic Coverage After P1F.1
+
+All save and preview transport legs now emit `console.info("[P1F]", ...)` — visible by default:
+
+| Leg | Source | Status values |
+|---|---|---|
+| `updateSection-inspector` | BrandWorkspace / PageEditor `handleSave` | attempt / ok / failed |
+| `updateSection` | PageEditor FIELD_CHANGE debounce | attempt / ok / failed |
+| `saveVersion` | BrandWorkspace `handleSaveDraft` | attempt / ok / failed |
+| `session` | BrandWorkspace preview retry loop | attempt / retry / ok / unavailable |
+
+### Typecheck
+
+- `npx tsc --noEmit` (os): **EXIT 0**
+
+### Scope
+
+Delphine only. Three files changed (one new). No logic changes — visibility and coverage only.
+`runSave`, `AutoField`, `SectionCard`, `updateSection`, `saveVersion`, `createPreviewSession`,
+preview token code, page_versions, preview_sessions, publish_history untouched.
+
+### Deploy / Retest
+
+Ready for deploy after owner git commit. Functional verification:
+- Open DevTools console (default filter — no "Verbose" needed)
+- Edit a field in the inspector → `[P1F] { leg: "updateSection-inspector", status: "attempt" }`
+- Edit inline in canvas → `[P1F] { leg: "updateSection", status: "attempt" }`
+- Click Save Draft → `[P1F] { leg: "saveVersion", status: "attempt" }`
+- Preview refresh → `[P1F] { leg: "session", status: "attempt" }`
+
+### Known Issue (separate ticket)
+
+`verifyPublishedVersion` operator-precedence bug flagged by Opus audit.
+NOT fixed in this phase — requires separate review and approval.
+
