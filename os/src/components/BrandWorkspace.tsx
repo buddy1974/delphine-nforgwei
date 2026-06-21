@@ -22,12 +22,11 @@ import {
 } from "@/app/(shell)/pages/actions";
 import SectionCard from "./builder/SectionCard";
 import { SECTION_TYPE_LABEL } from "@/lib/db/pages";
-import { createDelphinePreviewSession } from "@/app/(shell)/preview/actions";
+import { createPreviewSession } from "@/app/(shell)/preview/actions";
+import type { PreviewInboundMsg } from "@/lib/preview-bridge";
 
-/* ── postMessage types from preview iframe ─────────────────── */
-type PreviewMsg =
-  | { type: "SECTION_CLICK"; sectionId: string; field: string }
-  | { type: "FIELD_CHANGE"; sectionId: string; field: string; value: string };
+/* ── postMessage types from preview iframe (shared P1E contract) ── */
+type PreviewMsg = PreviewInboundMsg;
 
 const BP = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
@@ -84,6 +83,13 @@ export default function BrandWorkspace({
   /* ── Inline save debounce ── */
   const inlineSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
+  /* ── P1D.2: Inline autosave state ── */
+  type InlineSaveState = "idle" | "saving" | "saved" | "failed";
+  const [inlineSaveState, setInlineSaveState] = useState<InlineSaveState>("idle");
+  const inlineSaveClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* ── P1D.4: Seq counter — guards stale save responses from overwriting newer state ── */
+  const latestSaveSeq = useRef(0);
+
   /* ── Publish ── */
   const [publishPending, startPublish] = useTransition();
 
@@ -133,6 +139,8 @@ export default function BrandWorkspace({
 
   function onIframeLoad() {
     setPreviewLoading(false);
+    // P1D: handshake — tell iframe our origin and current edit state
+    sendToIframe({ type: "PREVIEW_INIT", origin: window.location.origin, editMode: isEditModeRef.current });
     if (isEditModeRef.current) sendToIframe({ type: "EDIT_MODE", enabled: true });
     if (selectedIdRef.current) {
       sendToIframe({ type: "HIGHLIGHT_SECTION", sectionId: selectedIdRef.current });
@@ -145,6 +153,11 @@ export default function BrandWorkspace({
       if (e.origin !== window.location.origin && e.origin !== previewOriginRef.current) return;
       const msg = e.data as PreviewMsg | null;
       if (!msg || typeof msg !== "object") return;
+
+      if (msg.type === "PREVIEW_READY") {
+        // Iframe confirmed handshake — diagnostic only
+        console.debug("[BrandWorkspace] PREVIEW_READY received from", e.origin);
+      }
 
       if (msg.type === "SECTION_CLICK") {
         selectedIdRef.current = msg.sectionId;
@@ -164,14 +177,47 @@ export default function BrandWorkspace({
         const key = `${sectionId}.${field}`;
         if (inlineSaveTimers.current[key]) clearTimeout(inlineSaveTimers.current[key]);
         inlineSaveTimers.current[key] = setTimeout(async () => {
-          await updateSection(sectionId, { [field as keyof SectionPatch]: value });
-          delete inlineSaveTimers.current[key];
+          // P1D.4: monotonic seq — each save request owns a unique seq number.
+          // Stale responses (earlier seq) silently discard their state updates.
+          const seq = (latestSaveSeq.current += 1);
+          setInlineSaveState("saving");
+          try {
+            // P1D.3: updateSection returns { ok: true } | { error: string } — never throws on DB error.
+            const result = await updateSection(sectionId, { [field as keyof SectionPatch]: value });
+            // P1D.4: discard if a newer save has started since this one was awaited
+            if (seq !== latestSaveSeq.current) return;
+            if ("error" in result) {
+              setInlineSaveState("failed");
+            } else {
+              setInlineSaveState("saved");
+              // Clear "Saved ✓" badge after 2.5s — but only if no newer save has fired by then
+              if (inlineSaveClearTimer.current) clearTimeout(inlineSaveClearTimer.current);
+              inlineSaveClearTimer.current = setTimeout(() => {
+                if (seq === latestSaveSeq.current) setInlineSaveState("idle");
+              }, 2500);
+              // P1D.2: refresh canvas so changes appear without manual reload
+              bumpPreview(true);
+            }
+          } catch {
+            // P1D.4: discard stale network errors too
+            if (seq !== latestSaveSeq.current) return;
+            setInlineSaveState("failed");
+          } finally {
+            delete inlineSaveTimers.current[key];
+          }
         }, 700);
       }
     }
 
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      // P1D.1: clear pending inline-save debounce timers — prevent late updateSection calls after unmount
+      Object.values(inlineSaveTimers.current).forEach(clearTimeout);
+      inlineSaveTimers.current = {};
+      // P1D.2: clear save-state clear timer
+      if (inlineSaveClearTimer.current) clearTimeout(inlineSaveClearTimer.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -183,14 +229,15 @@ export default function BrandWorkspace({
   }, [pages]);
 
   useEffect(() => {
-    if (brand.key !== "delphine") return;
+    if (brand.previewMode !== "secure") return;
 
     let active = true;
     const currentPage = pagesRef.current.find((p) => p.id === selectedPageId);
     setPreviewLoading(true);
     setSecurePreviewError(null);
 
-    createDelphinePreviewSession(
+    createPreviewSession(
+      brand.key,
       selectedPageId,
       currentPage?.title ?? "Preview",
       sectionsRef.current
@@ -231,12 +278,14 @@ export default function BrandWorkspace({
   }
 
   /* ── Section edit handlers (inspector) ── */
+  // P1D.5: return the updateSection result so AutoField can show "Save failed"
   async function handleSave(id: string, patch: SectionPatch) {
     setSections((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...patch } : s))
     );
-    await updateSection(id, patch);
-    bumpPreview();
+    const result = await updateSection(id, patch);
+    if ("ok" in result) bumpPreview();
+    return result;
   }
 
   async function handleDeleteSection(id: string) {
@@ -298,7 +347,7 @@ export default function BrandWorkspace({
       if (pageSlug) {
         setVerifyState("verifying");
         await new Promise<void>((r) => setTimeout(r, 2000));
-        const verification = await verifyPublishedVersion("delphine", pageSlug, result.publishedVersionId);
+        const verification = await verifyPublishedVersion(brand.key, pageSlug, result.publishedVersionId);
         if ("error" in verification) {
           setVerifyState("failed");
         } else if (verification.verified) {
@@ -436,6 +485,22 @@ export default function BrandWorkspace({
             {isEditMode ? "Exit Edit Mode" : "Edit Sections"}
           </button>
 
+          {/* P1D.2: Inline autosave indicator */}
+          {inlineSaveState === "saving" && (
+            <span className="text-[10px] font-semibold text-amber-600 animate-pulse">Saving...</span>
+          )}
+          {inlineSaveState === "saved" && (
+            <span className="text-[10px] font-bold text-green-700">Saved ✓</span>
+          )}
+          {inlineSaveState === "failed" && (
+            <span
+              className="text-[10px] font-bold text-red-600"
+              title="Autosave failed — check connection and retry"
+            >
+              Save failed
+            </span>
+          )}
+
           {/* P1C: Verification indicator */}
           {verifyState === "verifying" && (
             <span className="text-[10px] font-semibold text-amber-600 animate-pulse">
@@ -509,23 +574,23 @@ export default function BrandWorkspace({
                 <div className="h-full bg-plum w-2/3 animate-pulse" />
               </div>
             )}
-            {brand.key === "delphine" && securePreviewError ? (
+            {brand.previewMode === "secure" && securePreviewError ? (
               <div className="absolute inset-0 flex items-center justify-center bg-white px-6 text-center">
                 <div>
                   <p className="text-sm font-bold text-red-600">Secure preview unavailable</p>
                   <p className="mt-2 max-w-md text-xs leading-5 text-gray-500">{securePreviewError}</p>
                 </div>
               </div>
-            ) : brand.key === "delphine" && !securePreviewUrl ? (
+            ) : brand.previewMode === "secure" && !securePreviewUrl ? (
               <div className="absolute inset-0 flex items-center justify-center bg-white text-xs font-semibold text-gray-400">
                 Creating secure preview...
               </div>
             ) : (
               <iframe
                 ref={iframeRef}
-                key={brand.key === "delphine" ? securePreviewVersionId ?? selectedPageId : `${selectedPageId}-${previewVersion}`}
+                key={brand.previewMode === "secure" ? securePreviewVersionId ?? selectedPageId : `${selectedPageId}-${previewVersion}`}
                 src={
-                  brand.key === "delphine" && securePreviewUrl
+                  brand.previewMode === "secure" && securePreviewUrl
                     ? securePreviewUrl
                     : `${BP}/pages/${selectedPageId}/preview?v=${previewVersion}`
                 }

@@ -3,12 +3,14 @@ import { Button } from "@/components/ui/button";
 import { FadeIn } from "@/components/FadeIn";
 
 export interface EcosystemSectionProps {
+  sectionId?: string;
   title?: string;
   subtitle?: string;
   body?: string;
 }
 
 export function EcosystemSection({
+  sectionId,
   title = "Platforms Built to Impact Families, Leaders and Nations",
   subtitle = "The Ecosystem",
   body = "Through strategic platforms and initiatives, Delphine equips individuals, families and leaders to build stronger homes and communities.",
@@ -21,10 +23,20 @@ export function EcosystemSection({
             <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
               {subtitle}
             </span>
-            <h2 className="font-serif text-3xl sm:text-4xl lg:text-[2.85rem] font-bold text-foreground leading-tight">
+<h2
+              className="font-serif text-3xl sm:text-4xl lg:text-[2.85rem] font-bold text-foreground leading-tight"
+              data-editable="true"
+              data-field="title"
+              data-section-id={sectionId}
+            >
               {title}
             </h2>
-            <p className="text-base sm:text-lg text-muted-foreground leading-[1.7]">
+            <p
+              className="text-base sm:text-lg text-muted-foreground leading-[1.7]"
+              data-editable="true"
+              data-field="body"
+              data-section-id={sectionId}
+            >
               {body}
             </p>
           </div>

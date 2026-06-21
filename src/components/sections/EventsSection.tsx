@@ -9,6 +9,7 @@ export interface GalleryImage {
 }
 
 export interface EventsSectionProps {
+  sectionId?: string;
   title?: string;
   subtitle?: string;
   body?: string;
@@ -25,6 +26,7 @@ const DEFAULT_IMAGES: GalleryImage[] = [
 ];
 
 export function EventsSection({
+  sectionId,
   title = "A Voice on Stages Around the World",
   subtitle = "Media, Speaking & Global Impact",
   body = "Delphine Nforgwei is an international speaker and transformational leader, empowering individuals, families and communities through teaching, mentorship and leadership development.",
@@ -40,10 +42,20 @@ export function EventsSection({
             <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
               {subtitle}
             </span>
-            <h2 className="font-serif text-3xl sm:text-4xl lg:text-[2.6rem] font-bold text-foreground leading-tight">
+<h2
+              className="font-serif text-3xl sm:text-4xl lg:text-[2.6rem] font-bold text-foreground leading-tight"
+              data-editable="true"
+              data-field="title"
+              data-section-id={sectionId}
+            >
               {title}
             </h2>
-            <p className="text-base text-muted-foreground leading-[1.7]">
+            <p
+              className="text-base text-muted-foreground leading-[1.7]"
+              data-editable="true"
+              data-field="body"
+              data-section-id={sectionId}
+            >
               {body}
             </p>
           </div>

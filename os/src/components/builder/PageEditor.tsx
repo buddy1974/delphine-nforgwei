@@ -201,10 +201,12 @@ export default function PageEditor({
   }, []);
 
   /* ── Section handlers ── */
+  // P1D.5: return the updateSection result so AutoField can show "Save failed"
   async function handleSave(id: string, patch: SectionPatch) {
     setSections((prev) => prev.map((s) => s.id === id ? { ...s, ...patch } : s));
-    await updateSection(id, patch);
-    bumpPreview();
+    const result = await updateSection(id, patch);
+    if ("ok" in result) bumpPreview();
+    return result;
   }
   async function handleAdd(type: SectionType) {
     setAdding(false);

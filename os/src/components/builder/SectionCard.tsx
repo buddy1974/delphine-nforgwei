@@ -13,7 +13,7 @@ export default function SectionCard({
 }: {
   section: SectionRow;
   index: number;
-  onSave: (id: string, patch: SectionPatch) => Promise<void>;
+  onSave: (id: string, patch: SectionPatch) => Promise<{ ok: true } | { error: string }>;
   onDelete: (id: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);

@@ -1,5 +1,128 @@
 # Change Log
 
+## P1D.5 — Autosave Failure Path Source Verification + Real Fix — 2026-06-20
+
+### Root Cause (Why P1D.3 and P1D.4 Had Zero Effect on Live Behavior)
+
+Two compounding issues:
+
+1. **Wrong path patched.** P1D.3 and P1D.4 patched the FIELD_CHANGE canvas path in `BrandWorkspace.tsx`. The browser test edits the inspector Title field — which routes through `SectionCard → AutoField → BrandWorkspace.handleSave`. `AutoField` is a separate component with its own state machine. It has no "failed" state, no error check, and `setState("saved")` always fires.
+
+2. **P1D work was never committed.** Production was running commit `389ae37` (pre-P1D). All P1D through P1D.4 work was staged but never committed due to RISK-010 (persistent `.git/index.lock`). "Save failed" did not exist in the deployed bundle at all.
+
+### Fix — 6 files changed
+
+**`os/src/components/builder/AutoField.tsx`** (82 → 121 lines) — complete rewrite:
+- State type: `"idle" | "saving" | "saved"` → `"idle" | "saving" | "saved" | "failed"`
+- Added `seqRef = useRef(0)` for monotonic seq guard
+- `onSave` type: `Promise<void> | void` → `Promise<{ ok: true } | { error: string }>`
+- `schedule()`: wrapped `await onSave(next)` in try/catch; checks `"error" in result` before setting "saved"; "failed" does NOT auto-clear; "Saved ✓" clear timer is seq-bound
+- Added "Save failed" display badge (red, with tooltip)
+- Note: Write tool truncated at line 77 — repaired via python3 (RISK-001)
+
+**`os/src/components/builder/SectionCard.tsx`** (142 lines):
+- `onSave` prop type: `Promise<void>` → `Promise<{ ok: true } | { error: string }>`
+- Note: Edit tool truncated 5 lines from end — repaired via python3 append (RISK-001)
+
+**`os/src/components/BrandWorkspace.tsx`** (645 lines):
+- `handleSave`: `await updateSection(id, patch)` → `const result = await updateSection(id, patch); if ("ok" in result) bumpPreview(); return result;`
+
+**`os/src/components/builder/PageEditor.tsx`** (692 lines):
+- `handleSave`: same pattern — return result, only bumpPreview on success
+
+**`os/src/components/builder/EventEditor.tsx`** (110 lines):
+- `save()`: `await updateEvent(...)` → `return await updateEvent(...)`
+- Inline image callback: `await save(...)` → `return await save(...)`
+
+**`os/src/components/builder/PostEditor.tsx`** (101 lines):
+- `save()`: `await updatePost(...)` → `return await updatePost(...)`
+- Inline image callback: `await save(...)` → `return await save(...)`
+
+### "Save failed" String Confirmed in Source
+`AutoField.tsx` line 94: `Save failed` (display badge)
+
+### Validation
+- `tsc -b` (project refs): PASS
+- `tsc -p tsconfig.app.json --noEmit` (Vite SPA): PASS
+- `cd os && tsc --noEmit` (Next.js OS): PASS
+
+### Action Required Before Browser Retest
+Owner must resolve RISK-010 on Windows:
+```
+rm .git/index.lock
+git add -A
+git commit -m "P1D through P1D.5: edit bridge, autosave truthfulness, real save path fix"
+git push
+```
+Then await Vercel deploy before retesting.
+
+### Status
+P1D.5 COMPLETE. STOP. Do not start P1E. Human approval required before push.
+
+---
+
+## P1D.4 — Autosave State Race Fix — 2026-06-20
+
+### Summary
+Fixed a race condition where multiple in-flight autosave requests could overwrite each other's UI state: a stale success could show "Saved ✓" after a newer failure, and a stale clear timer could wipe a "Save failed" badge.
+
+### Root Cause
+`inlineSaveState` was global and request-unbound. If save A (older) resolved after save B (newer), A's `setInlineSaveState("saved")` overwrote B's `setInlineSaveState("failed")`. Similarly, A's 2.5s clear timer could fire and reset the badge even after B showed a failure.
+
+### Fix
+`os/src/components/BrandWorkspace.tsx`:
+- Added `latestSaveSeq = useRef(0)` near inline-save state declarations (line 91)
+- At entry of each setTimeout callback: `const seq = (latestSaveSeq.current += 1)`
+- All state transitions guarded: `if (seq !== latestSaveSeq.current) return`
+- The 2.5s clear timer also checks seq before calling `setInlineSaveState("idle")`
+- `delete inlineSaveTimers.current[key]` moved into `finally` block (always cleans up, even on return)
+
+### State-Machine Guarantees After This Fix
+- **Stale success overwrites newer failure?** No. `seq !== latestSaveSeq.current` returns early.
+- **Stale clear timer wipes Save failed?** No. Timer checks `seq === latestSaveSeq.current` before setting idle.
+- **Stale failure overwrites newer success?** No. Same seq guard in catch block.
+- **Debounce timer cleaned up even on early return?** Yes. `finally` block runs regardless.
+
+### Files Changed
+- `os/src/components/BrandWorkspace.tsx` — added `latestSaveSeq` ref (line 91), patched FIELD_CHANGE handler (lines 179–208). 643 lines after patch.
+
+### Validation
+- `tsc -b` (project refs): PASS
+- `tsc -p tsconfig.app.json --noEmit` (Vite SPA): PASS
+- `cd os && tsc --noEmit` (Next.js OS): PASS
+
+### Status
+P1D.4 COMPLETE. Ready for browser retest. STOP. Do not start P1E.
+
+---
+
+## P1D.3 — Autosave Failure Truthfulness Fix — 2026-06-20
+
+### Summary
+Fixed a silent failure bug where a Supabase write error during inline autosave would still show "Saved ✓" in the toolbar.
+
+### Root Cause
+`updateSection` (in `os/src/app/(shell)/pages/actions.ts`) returns `{ ok: true } | { error: string }` — it never throws on a Supabase error. The `FIELD_CHANGE` handler in `BrandWorkspace.tsx` used a `try/catch` that only fires on true network-level exceptions. A Supabase write failure resolves the `await` normally, so `setInlineSaveState("saved")` always ran regardless of the actual result.
+
+### Fix
+`os/src/components/BrandWorkspace.tsx` — `FIELD_CHANGE` handler:
+- Replaced `await updateSection(...)` with `const result = await updateSection(...)`
+- Added explicit `"error" in result` discriminant check before setting `"saved"` state
+- `"failed"` is now set for both: (1) Supabase errors (returned union) and (2) network-level throws (fetch/503 caught by outer try/catch)
+- `bumpPreview(true)` and the 2.5s clear timer are only triggered on confirmed success (`else` branch)
+
+### Files Changed
+- `os/src/components/BrandWorkspace.tsx` — FIELD_CHANGE handler, lines 179–195 (632 lines after patch)
+
+### Validation
+- `tsc -b` (OS): PASS — no output
+- `tsc -p tsconfig.app.json --noEmit` (Vite SPA): PASS — no output
+
+### Status
+P1D.3 COMPLETE. STOP. Do not start P1E. Human approval required.
+
+---
+
 ## P1B.7A Visual Verification — 2026-06-15
 
 ### Result: PASS
@@ -285,4 +408,172 @@ After `publishVersion` succeeds:
 ### Scope
 
 Delphine only. P1B (preview_sessions, OsPreview, preview token security) untouched. H8 not started.
+
+
+## P1D — Click-to-Edit Bridge (recorded retroactively 2026-06-19)
+
+Documented here to close a governance gap: P1D shipped in the working tree but was
+never logged. Behavior recorded in decision-log.md (P1D entry).
+
+### Files (P1D, as found in the working tree)
+- `os/src/components/BrandWorkspace.tsx` — postMessage bridge, edit-mode handshake,
+  inline autosave, inspector wiring, link/iframe navigation guard.
+- `src/pages/OsPreview.tsx` — inbound bridge (PREVIEW_INIT/EDIT_MODE/HIGHLIGHT_SECTION),
+  click handler (SECTION_CLICK + link guard), input handler (FIELD_CHANGE debounce),
+  contenteditable wiring, highlight styles.
+- `src/components/sections/*` — `sectionId` + `data-field`/`data-editable` affordances
+  on real Delphine components.
+
+## P1E — Ecosystem Consolidation & Preview-Plane Generalization — 2026-06-19
+
+### Summary
+Generalized the Delphine-specific secure preview/edit plane into a reusable,
+brand-agnostic architecture. No behavior or visual change for any brand. Delphine
+remains the only activated ("secure") brand. Prepares H8 (not started).
+
+### Files created
+- `os/src/lib/preview-bridge.ts` — shared postMessage contract (OS side).
+- `src/lib/preview-bridge.ts` — shared postMessage contract (rendering side).
+- `os/src/lib/preview-config.ts` — server-only per-brand public-site URL resolver.
+- `os/src/lib/preview-api.ts` — shared, brand-generic preview API handler (security verbatim).
+- `os/src/app/api/preview/[brand]/route.ts` — brand-generic preview route.
+- `src/components/sections/preview-adapters.tsx` — shared adapter layer (mapping + routing + generic fallback), moved verbatim from OsPreview.
+
+### Files changed
+- `os/src/lib/brands.ts` — added `previewMode`, `PREVIEW_SITE_URL_ENV`, `getOsBrand()`.
+- `os/src/app/(shell)/preview/actions.ts` — `createPreviewSession(brandKey, …)`; old name kept as deprecated wrapper.
+- `os/src/app/api/preview/delphine/route.ts` — reduced to a thin delegate to the shared handler (could not be deleted: sandbox mount blocks file removal).
+- `os/src/middleware.ts` — preview public/header match generalized `/api/preview/delphine` → `/api/preview/`.
+- `os/next.config.js` — preview header source `/api/preview/delphine` → `/api/preview/:brand`.
+- `os/.env.example` — added inert SMCC/EWOMAN/DRIMP `_PUBLIC_SITE_URL`.
+- `os/src/components/BrandWorkspace.tsx` — uses `brand.previewMode === "secure"` (was `brand.key === "delphine"`, 5 sites); calls `createPreviewSession(brand.key, …)`; `verifyPublishedVersion(brand.key, …)`; imports shared bridge type.
+- `src/pages/OsPreview.tsx` — reduced 719 → 332 lines; imports shared adapter + bridge; reads brand from `/os-preview/:brand`; fetches `/api/preview/:brand`.
+
+### Verification
+- `npx tsc --noEmit` — root: PASS (0 errors); os: PASS (0 errors).
+- Static regression: Delphine render/bridge/adapter logic byte-identical to pre-P1E.
+- `npm run build` not run (sandbox timeout — RISK-002); relies on Vercel CI.
+
+### Known limitations
+- Could not `git commit` from the sandbox (mount blocks unlink/rename — RISK-010);
+  work backed up as a patch + tarball in outputs; owner must commit on Windows.
+- Inert `os/src/app/api/preview/__probe[x]` folder left behind (private folder, excluded
+  from routing; owner deletes on Windows).
+- Live edit/publish/rollback smoke test pending (no browser/live DB in sandbox).
+browser session. Human must verify after deployment.
+
+---
+
+## P1D.1 — Edit Bridge Hardening — 2026-06-20
+
+### Summary
+
+Post-audit hardening pass after Opus review identified build-breaking corruption and
+security gaps in the P1D delivery. P1D.1 is NOT a feature change — it is correctness
+and security repair. All visual output, bridge behavior, and API surfaces are identical.
+
+### Issues Resolved
+
+1. **AboutSection.tsx truncated** — disk file ended mid-closing-tag (`<` at line 80).
+   Repaired via python3 full rewrite. JSX complete, all P1D data attributes preserved.
+
+2. **BooksSection.tsx truncated** — disk file ended mid-closing-tag (`</` at line 120).
+   Repaired via python3 full rewrite. JSX complete, all P1D data attributes preserved.
+
+3. **HeroSection.tsx — data-editable on motion elements (architecture violation)** —
+   `data-editable="true"` was set directly on `motion.h1` and `motion.p`. framer-motion
+   wraps these in its own DOM management. Moved all three editable attributes onto inner
+   `<span>` children: `motion.h1 > span[data-editable]`, `motion.p > span[data-editable]`.
+   Animation wrappers unchanged. No visual change.
+
+4. **OsPreview — timer leak on unmount** — `inputTimersRef` debounce timers were not
+   cleared when the component unmounted. Added `Object.values(inputTimersRef.current).forEach(clearTimeout)` in the input handler useEffect cleanup.
+
+5. **BrandWorkspace — timer leak on unmount** — `inlineSaveTimers` debounce timers were
+   not cleared when the component unmounted. Added `Object.values(inlineSaveTimers.current).forEach(clearTimeout)` in the handleMessage useEffect cleanup.
+
+6. **OsPreview — first-sender-wins security hole** — PREVIEW_INIT was accepted from any
+   origin as long as it was a non-null string. A rogue page loading first could hijack
+   the bridge. Fixed: pre-compute `configuredOsOrigin = new URL(OS_URL).origin` inside
+   the useEffect. All inbound messages are rejected unless `e.origin === configuredOsOrigin`
+   (general gate). PREVIEW_INIT has an additional explicit guard: `if (e.origin !== configuredOsOrigin) return`. `trustedOriginRef` is only ever updated to `configuredOsOrigin`.
+
+7. **OsPreview.tsx truncated by Edit tool** — After origin hardening patch, Edit tool
+   truncated the file at `ensureMeta` (cut off at `document.querySe`). Repaired via
+   python3 full rewrite (345 lines, complete).
+
+### Typecheck Results (authoritative gates)
+
+- `npx tsc -b` (root project): **EXIT 0**
+- `npx tsc -p tsconfig.app.json --noEmit` (root app): **EXIT 0**
+- OS `npx tsc --noEmit`: **EXIT 0**
+
+### Files Changed
+
+- `src/components/sections/AboutSection.tsx` — repaired (truncation fix)
+- `src/components/sections/BooksSection.tsx` — repaired (truncation fix)
+- `src/components/sections/HeroSection.tsx` — data-editable moved to inner spans
+- `src/pages/OsPreview.tsx` — origin hardening + timer cleanup + truncation repair
+- `os/src/components/BrandWorkspace.tsx` — timer cleanup on unmount
+
+### Scope
+
+Delphine only. P1B/P1C/P1E untouched. H8 not started.
+
+### Commit Status
+
+NOT pushed. Git commit blocked by stale `.git/index.lock` (RISK-010 — sandbox
+cannot unlink). Owner must run on Windows: `rm .git/index.lock` then `git add -A && git commit`.
+
+### Functional Verification Required
+
+End-to-end click-to-edit requires a deployed browser session. Human must verify.
+
+---
+
+## P1D.2 — Autosave Error State + Real-Time Preview Refresh — 2026-06-20
+
+### Context
+
+P1D.1 browser verification PASSED. Two runtime issues identified:
+1. HTTP 503 during Vercel cold start caused `Saving...` to disappear as if save succeeded — silent data loss risk.
+2. Canvas preview did not reflect inline edits. User had to manually reload.
+
+### Changes
+
+**`os/src/components/BrandWorkspace.tsx`** — only file modified.
+
+**Autosave error state (`type InlineSaveState = "idle" | "saving" | "saved" | "failed"`):**
+- Added `inlineSaveState` state and `inlineSaveClearTimer` ref
+- `FIELD_CHANGE` handler: `updateSection` call now wrapped in `try/catch`
+  - On flight: `setInlineSaveState("saving")` — shows `Saving...` badge
+  - On success (HTTP 200): `setInlineSaveState("saved")` — shows `Saved ✓` badge, clears after 2500ms
+  - On error (503, network failure, thrown): `setInlineSaveState("failed")` — shows `Save failed` badge, persists until next attempt
+- `inlineSaveClearTimer` cleared on unmount to prevent state mutation after unmount
+- Badge position: toolbar, between Edit Mode toggle and P1C verification indicator
+
+**Real-time preview refresh:**
+- On successful save: `bumpPreview(true)` called — forces new preview session with `sectionsRef.current` (already updated optimistically)
+- Iframe reloads → `onIframeLoad` fires → sends `PREVIEW_INIT` with current edit mode state → edit mode and section highlight restored automatically
+- Net latency from last keystroke to canvas update: ~600ms (OsPreview debounce) + server roundtrip + 700ms (BrandWorkspace debounce) + 400ms (bumpPreview delay) ≈ 2–3s
+
+### Typecheck Results
+
+- `npx tsc -b`: **EXIT 0**
+- `npx tsc -p tsconfig.app.json --noEmit`: **EXIT 0**
+- OS `npx tsc --noEmit`: **EXIT 0**
+
+### Scope
+
+Delphine only. One file changed. P1B/P1C/P1D/P1D.1/P1E untouched. H8 not started.
+
+### Limitations
+
+- Preview refresh reloads the entire iframe — user loses focus/cursor in `contentEditable` element during reload. Acceptable trade-off: reload happens ~2s after user stops typing, not while actively typing.
+- `Save failed` badge does not offer automatic retry. User must re-type or re-click to trigger a new FIELD_CHANGE.
+- Git commit blocked (RISK-010). Owner must commit on Windows.
+
+### Functional Verification Required
+
+Edit title → Saving... → Saved ✓ → canvas updates automatically. Simulate 503 → Save failed (not cleared). Human must verify in deployed browser session.
 

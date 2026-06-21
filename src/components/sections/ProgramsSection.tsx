@@ -11,6 +11,7 @@ export interface ProgramItem {
 }
 
 export interface ProgramsSectionProps {
+  sectionId?: string;
   title?: string;
   subtitle?: string;
   button_label?: string;
@@ -26,6 +27,7 @@ const DEFAULT_ITEMS: ProgramItem[] = [
 ];
 
 export function ProgramsSection({
+  sectionId,
   title = "How Delphine Serves Women & Families",
   subtitle = "Services",
   button_label = "Explore All Programs",
@@ -40,7 +42,12 @@ export function ProgramsSection({
             <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
               {subtitle}
             </span>
-            <h2 className="font-serif text-3xl sm:text-4xl lg:text-[2.85rem] font-bold text-foreground leading-tight">
+            <h2
+              className="font-serif text-3xl sm:text-4xl lg:text-[2.85rem] font-bold text-foreground leading-tight"
+              data-editable="true"
+              data-field="title"
+              data-section-id={sectionId}
+            >
               {title}
             </h2>
           </div>

@@ -7,6 +7,7 @@ export interface GalleryImageItem {
 }
 
 export interface GallerySectionProps {
+  sectionId?: string;
   title?: string;
   subtitle?: string;
   images?: GalleryImageItem[];
@@ -21,6 +22,7 @@ const DEFAULT_IMAGES: GalleryImageItem[] = [
 ];
 
 export function GallerySection({
+  sectionId,
   title = "Reaching People. Changing Lives.",
   subtitle = "Impact Across Communities",
   images = DEFAULT_IMAGES,
@@ -33,7 +35,12 @@ export function GallerySection({
             <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
               {subtitle}
             </span>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-foreground leading-tight">
+<h2
+              className="font-serif text-2xl sm:text-3xl font-bold text-foreground leading-tight"
+              data-editable="true"
+              data-field="title"
+              data-section-id={sectionId}
+            >
               {title}
             </h2>
           </div>

@@ -2,21 +2,33 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createPreviewToken } from "@/lib/preview-tokens";
+import { getBrandPublicSiteUrl } from "@/lib/preview-config";
+import { getOsBrand } from "@/lib/brands";
 import type { SectionRow } from "@/lib/db/pages";
 import { randomUUID } from "crypto";
 
-function getDelphinePublicSiteUrl() {
-  const configured = process.env.DELPHINE_PUBLIC_SITE_URL;
-  if (configured) return configured.replace(/\/+$/, "");
-  if (process.env.NODE_ENV !== "production") return "http://localhost:5173";
-  throw new Error("DELPHINE_PUBLIC_SITE_URL must be set in production.");
-}
-
-export async function createDelphinePreviewSession(
+/**
+ * P1E — Brand-generic secure preview session creator.
+ *
+ * Generalised from createDelphinePreviewSession. Snapshots the current
+ * sections into an immutable page_versions row, mints a short-lived signed
+ * token, records a preview_sessions row, and returns the brand's public-site
+ * preview URL. Only brands whose previewMode is "secure" are permitted —
+ * everything else is rejected, so SMCC / E-Woman / DRIMP behaviour is
+ * unchanged (they continue to use the generic OS-internal preview).
+ */
+export async function createPreviewSession(
+  brandKey: string,
   pageId: string,
   title: string,
   sections: SectionRow[]
 ): Promise<{ previewUrl: string; pageVersionId: string } | { error: string }> {
+  const brand = getOsBrand(brandKey);
+  if (!brand) return { error: "Unknown brand." };
+  if (brand.previewMode !== "secure") {
+    return { error: `Secure website preview is not enabled for ${brand.shortName}.` };
+  }
+
   const db = createSupabaseAdminClient();
 
   const { data: page, error: pageError } = await db
@@ -26,8 +38,8 @@ export async function createDelphinePreviewSession(
     .single();
 
   if (pageError || !page) return { error: "Page not found." };
-  if (page.brand_key !== "delphine") {
-    return { error: "Secure website preview is only enabled for Delphine in P1B." };
+  if (page.brand_key !== brand.key) {
+    return { error: "Page does not belong to this brand." };
   }
 
   const { data: version, error: versionError } = await db
@@ -53,7 +65,7 @@ export async function createDelphinePreviewSession(
     id: sessionId,
     page_id: pageId,
     page_version_id: version.id,
-    brand_key: "delphine",
+    brand_key: brand.key,
     nonce_hash: nonceHash,
     token_expires_at: expiresAt,
   });
@@ -64,6 +76,19 @@ export async function createDelphinePreviewSession(
 
   return {
     pageVersionId: version.id as string,
-    previewUrl: `${getDelphinePublicSiteUrl()}/os-preview/delphine?token=${encodeURIComponent(token)}`,
+    previewUrl: `${getBrandPublicSiteUrl(brand.key)}/os-preview/${brand.key}?token=${encodeURIComponent(token)}`,
   };
+}
+
+/**
+ * @deprecated P1E — thin backward-compatible wrapper. Prefer
+ * createPreviewSession(brandKey, ...). Retained so any other caller keeps
+ * working; delegates to the generic implementation with brand "delphine".
+ */
+export async function createDelphinePreviewSession(
+  pageId: string,
+  title: string,
+  sections: SectionRow[]
+) {
+  return createPreviewSession("delphine", pageId, title, sections);
 }

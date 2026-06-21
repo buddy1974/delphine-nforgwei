@@ -5,6 +5,7 @@ import { FadeIn } from "@/components/FadeIn";
 import heroBg from "@/assets/hero-bg.jpg";
 
 export interface ContactSectionProps {
+  sectionId?: string;
   title?: string;
   body?: string;
   button_label?: string;
@@ -14,6 +15,7 @@ export interface ContactSectionProps {
 }
 
 export function ContactSection({
+  sectionId,
   title = "Ready to Rise Into Your Next Season?",
   body = "Take the next step toward clarity, confidence, and purpose.",
   button_label = "Book a Discovery Call",
@@ -36,10 +38,20 @@ export function ContactSection({
       <div className="container mx-auto px-6 lg:px-12 relative z-10">
         <FadeIn variant="scale-in">
           <div className="max-w-2xl mx-auto text-center space-y-8">
-            <h2 className="font-serif text-3xl sm:text-4xl lg:text-[2.85rem] font-bold text-primary-foreground leading-tight">
+<h2
+              className="font-serif text-3xl sm:text-4xl lg:text-[2.85rem] font-bold text-primary-foreground leading-tight"
+              data-editable="true"
+              data-field="title"
+              data-section-id={sectionId}
+            >
               {title}
             </h2>
-            <p className="text-base sm:text-lg text-primary-foreground/70 leading-[1.7]">
+            <p
+              className="text-base sm:text-lg text-primary-foreground/70 leading-[1.7]"
+              data-editable="true"
+              data-field="body"
+              data-section-id={sectionId}
+            >
               {body}
             </p>
             <div className="pt-4 flex flex-col items-center gap-5">

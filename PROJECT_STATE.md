@@ -1,87 +1,45 @@
-# PROJECT STATE — DELPHINE (Authority Platform)
+# PROJECT STATE — DELPHINE (Authority Platform + Ecosystem OS)
 
-Last Updated: 2026-02-22
-
----
-
-## 1. Hosting
-
-Frontend:
-- Vite + React (static site)
-
-Backend:
-- None (static authority site)
-
-Deployment Platform:
-- GitHub → Vercel
+Last Updated: 2026-06-19 (P1E)
 
 ---
 
-## 2. Canonical Domain
+## 1. What this repo is
+TWO apps in one repo:
+- Root: the public Delphine website (Vite + React), the rendering plane.
+- `os/`: the Ecosystem OS (Next.js 14), the control/content plane for ALL four
+  brands (delphine, smcc, ewoman, drimp). Served at delphine-nforgwei.com/os.
 
-Production URL:
-https://www.delphine-nforgwei.com
+(The earlier "static authority site, no backend, no database" description was
+stale and has been corrected.)
 
-API Base:
-None
+## 2. Hosting / deploy
+- Site: GitHub → Vercel. Production: https://www.delphine-nforgwei.com
+- OS: separate Vercel project, root `os/`, basePath `/os`.
 
----
+## 3. Backend / data
+- Supabase `mohogdfdzmewwvgcizga` (single ecosystem DB). RLS everywhere; OS
+  service role only. Public sites read via the OS public API only.
 
-## 3. Backend Architecture
+## 4. Capabilities (Delphine)
+- Website-first editing in the OS canvas (BrandWorkspace).
+- Secure preview plane (preview_sessions + immutable page_versions + signed token).
+- Click-to-edit bridge (P1D): SECTION_CLICK / EDIT_MODE / HIGHLIGHT_SECTION /
+  FIELD_CHANGE / PREVIEW_INIT / PREVIEW_READY; inline autosave.
+- Publish lifecycle (P1C): draft → snapshot → publish (published_version_id) →
+  verify → rollback → unpublish; publish_history audit.
+- P1E: the preview plane is now brand-agnostic (createPreviewSession,
+  /api/preview/[brand], shared bridge + adapter modules, per-brand site-URL env).
+  Only Delphine is activated (previewMode "secure").
 
-No custom backend logic.
-No API routes.
-Pure authority site.
+## 5. Environment variables (OS)
+NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
+PREVIEW_TOKEN_SECRET, DELPHINE_PUBLIC_SITE_URL (active),
+SMCC/EWOMAN/DRIMP_PUBLIC_SITE_URL (prepared, inert), TELEGRAM_*, OPENAI_API_KEY.
 
----
+## 6. Messaging / payments
+WhatsApp + email via direct links; OS Message Center + Payment Center for ops.
 
-## 4. Environment Variables
-
-None required.
-
----
-
-## 5. Messaging
-
-WhatsApp:
-- Direct wa.me links only
-
-Email:
-- Direct mailto links only
-
-No automated messaging pipeline.
-
----
-
-## 6. Payments
-
-None.
-
----
-
-## 7. Database
-
-None.
-
----
-
-## 8. Security Status
-
-Static site.
-No exposed secrets.
-No admin routes.
-
----
-
-## 9. Known Issues
-
-- No central integration with ecosystem backend
-- No structured contact form persistence
-
----
-
-## 10. Next Architectural Step
-
-1. Optionally connect contact form to ecosystem API
-2. Link clearly to SMCC + E-Woman
-3. Add structured lead capture in future
+## 7. Known issues / next
+- See docs/known-risks.md. Next phase after P1E is H8 (activate E-Woman secure
+  preview) — NOT started. Owner approval required.

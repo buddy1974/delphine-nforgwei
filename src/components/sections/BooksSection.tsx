@@ -16,6 +16,7 @@ export interface BooksStatItem {
 }
 
 export interface BooksSectionProps {
+  sectionId?: string;
   title?: string;
   subtitle?: string;
   button_label?: string;
@@ -39,6 +40,7 @@ const DEFAULT_STATS: BooksStatItem[] = [
 ];
 
 export function BooksSection({
+  sectionId,
   title = "A Life Dedicated to Transformation",
   subtitle = "Authority & Impact",
   button_label = "View All Books",
@@ -54,7 +56,12 @@ export function BooksSection({
             <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
               {subtitle}
             </span>
-            <h2 className="font-serif text-3xl sm:text-4xl lg:text-[2.6rem] font-bold text-foreground leading-tight">
+            <h2
+              className="font-serif text-3xl sm:text-4xl lg:text-[2.6rem] font-bold text-foreground leading-tight"
+              data-editable="true"
+              data-field="title"
+              data-section-id={sectionId}
+            >
               {title}
             </h2>
           </div>

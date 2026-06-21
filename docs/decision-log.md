@@ -1,5 +1,49 @@
 # Decision Log
 
+## P1D.5 — Inspector Save Path: AutoField Owns the State Machine (2026-06-20)
+
+### Decision: Fix AutoField, not BrandWorkspace FIELD_CHANGE path, for inspector autosave failures
+
+**Context:** P1D.3 and P1D.4 patched `BrandWorkspace.tsx` FIELD_CHANGE canvas path. Browser test failed: "Save failed" never appeared. Bundle analysis showed the string was not present in production. Root cause: the inspector Title field routes through `AutoField.tsx`, a separate component with its own state machine. `AutoField` had no "failed" state. Its `onSave` was typed `Promise<void>` — callers could not return a result to it. Additionally, all P1D work was uncommitted due to RISK-010 (index.lock), so production was running pre-P1D code.
+
+**Decision:** Fix `AutoField.tsx` as the authoritative per-field save state machine. Add "failed" state, seq guard, try/catch. Change `onSave` to `Promise<{ ok: true } | { error: string }>`. Propagate the return type up through all callers: `SectionCard`, `BrandWorkspace.handleSave`, `PageEditor.handleSave`, `EventEditor.save`, `PostEditor.save`. All five callers already used `updateSection`/`updateEvent`/`updatePost` which already returned the discriminated union — they were just discarding it.
+
+**Rationale:** `AutoField` is the component the user sees (the badge renders inside the label span). The state must live where the display lives. Changing `AutoField` once fixes all inspector fields across all section types, all editors, all brands.
+
+**Consequence:** Every inspector field (Title, Subtitle, Body, Button label, Button link, image URL, event fields, post fields) now shows accurate "Saving… / Saved ✓ / Save failed" state. "Save failed" does not auto-clear. bumpPreview only fires on confirmed success. Seq guard prevents stale responses from overwriting newer state.
+
+**RISK-001 encountered:** Write tool truncated AutoField.tsx at line 77 (mid-string), Edit tool truncated SectionCard.tsx by 5 lines. Both repaired via python3. This is now a documented pattern — any file >60 lines must use python3 for creation/repair.
+
+---
+
+## P1D.4 — Autosave Race Fix: Monotonic Seq Counter (2026-06-20)
+
+### Decision: Per-request monotonic seq number; all state transitions discard if seq is stale
+
+**Context:** Opus audit identified that `inlineSaveState` is global and unbound to any specific save request. Multiple saves in flight (rapid typing across fields or rapid re-type of same field) allow an older response to overwrite a newer one. The 2.5s clear timer also fires unguarded, potentially clearing "Save failed" for a newer error.
+
+**Decision:** Add `latestSaveSeq = useRef(0)`. Each setTimeout callback increments the counter and captures its own `seq`. Every subsequent state mutation checks `seq === latestSaveSeq.current` before executing. The 2.5s clear timer also checks seq before setting idle. `delete inlineSaveTimers.current[key]` moved to `finally` to guarantee cleanup even on early `return`.
+
+**Rationale:** Monotonic counter is the standard solution for request-race problems in React without introducing cancellation tokens or AbortController complexity. Single ref, no external state, no re-render overhead, no change to server action signatures.
+
+**Consequence:** UI state now always reflects the most recently started save. Earlier responses are silently discarded. "Save failed" cannot be overwritten by a stale "Saved ✓", and the clear timer cannot wipe it.
+
+---
+
+## P1D.3 — Fix Autosave Truth: Check Return Value, Not Just try/catch (2026-06-20)
+
+### Decision: Inspect discriminated union return from updateSection; keep outer try/catch for network throws
+
+**Context:** `updateSection` returns `{ ok: true } | { error: string }` and never throws. The existing `try/catch` in the FIELD_CHANGE debounce only catches genuine fetch/network failures, not Supabase-level write errors. A forced 503 or DB error showed "Saved ✓" — a correctness violation.
+
+**Decision:** Change only `BrandWorkspace.tsx`. Do NOT change `updateSection` signature in `actions.ts` to avoid breaking other callers (inspector `handleSave`, etc.). Add `const result = await updateSection(...)` and branch on `"error" in result` before setting the save state badge.
+
+**Rationale:** Narrowest possible fix. `actions.ts` is in a parenthesized route group (RISK-001 applies). `BrandWorkspace.tsx` is not, and the patch is small enough for a python3 string replacement. Outer try/catch retained to handle genuine network-level exceptions.
+
+**Consequence:** Toolbar badge is now truthful. "Saved ✓" only appears on `{ ok: true }`. "Save failed" appears on `{ error: string }` or thrown network error.
+
+---
+
 ## P1B.7A — Visual Verification: Real Website Renders in OS Canvas (2026-06-15)
 
 ### Outcome: CONFIRMED PASS
@@ -185,4 +229,154 @@
 **Consequence:** Draft edits after publish do NOT change live content until the next explicit publish action. Content and draft are now decoupled.
 
 ---
+
+
+---
+
+## P1D — Click-to-Edit Bridge (recorded retroactively 2026-06-19)
+
+### Status: COMPLETE (implemented before P1E; documented here to close the governance gap)
+
+**Context:** P1D was implemented in the working tree but never recorded in the
+decision/change logs (a MEMORY RULE gap surfaced by the 2026-06-19 executive audit).
+This entry records the actual, verified behavior.
+
+**Decision:** Add a postMessage bridge between the OS BrandWorkspace (parent) and the
+secure preview iframe (rendering plane) so the owner can click a section on the real
+website canvas and edit it.
+
+**Message contract (authoritative):**
+- Parent → iframe: `PREVIEW_INIT` (handshake: origin + edit state), `EDIT_MODE`
+  (toggle inline editability), `HIGHLIGHT_SECTION` (select/scroll a section).
+- iframe → parent: `SECTION_CLICK` (section + field clicked), `FIELD_CHANGE`
+  (debounced inline edit), `PREVIEW_READY` (handshake ack).
+
+**Behavior:**
+- Clicking a section emits `SECTION_CLICK` → auto-enables edit mode → opens the
+  inspector for that section (labelled by SECTION_TYPE_LABEL).
+- Inline edits in contenteditable fields emit `FIELD_CHANGE` (600ms debounce) →
+  BrandWorkspace autosaves to `sections` (700ms debounce) → canvas reflects it.
+- In edit mode, anchor/button clicks are guarded (preventDefault) so the iframe
+  never navigates; Enter is blocked in contenteditable.
+- Origin is pinned from `PREVIEW_INIT`; outbound messages target only that origin.
+
+**Consequence:** Delphine satisfies "edit the website itself." Real components render;
+edits persist; publish uses the P1C lifecycle. P1D is unchanged by P1E.
+
+---
+
+## P1E — Ecosystem Consolidation & Preview-Plane Generalization (2026-06-19)
+
+### Status: COMPLETE (implementation). Human approval required before H8.
+
+**Context:** The secure preview/edit plane was hardcoded to Delphine in three layers.
+This blocked reuse and was the structural bottleneck for H8. P1E generalizes it
+WITHOUT changing any brand's behavior or appearance.
+
+**Decisions:**
+1. **Brand metadata drives preview mode.** `OsBrand` gains `previewMode: "secure" | "generic"`.
+   Only Delphine is "secure"; SMCC/E-Woman/DRIMP are "generic" (unchanged).
+2. **Generic session creator.** `createDelphinePreviewSession()` → `createPreviewSession(brandKey, …)`.
+   Gated on `previewMode === "secure"`. Delphine path is byte-identical. The old name is
+   retained as a thin deprecated wrapper.
+3. **Generic preview API.** `/api/preview/delphine` → `/api/preview/[brand]`. The audited
+   handler (token/nonce/TTL/revocation/origin/brand-match) was moved VERBATIM into shared
+   `lib/preview-api.ts`. The `delphine` static route is retained (sandbox could not delete
+   it) as a thin delegate to the same handler — behaviour identical.
+4. **Shared bridge contract.** `lib/preview-bridge.ts` (OS + site) centralizes the P1D
+   message types. Runtime string literals unchanged.
+5. **Shared adapter layer.** `src/components/sections/preview-adapters.tsx` holds the
+   section-type → props mapping + switch routing + generic fallback renderer, moved verbatim
+   from OsPreview. Visual components remain brand-specific and were NOT merged.
+6. **Per-brand site-URL env.** `lib/preview-config.ts` resolves `<BRAND>_PUBLIC_SITE_URL`.
+   `SMCC/EWOMAN/DRIMP_PUBLIC_SITE_URL` documented in `.env.example` but inert.
+7. **Rendering brand from route.** `/os-preview/:brand` reads its brand param; fetches
+   `/api/preview/:brand`. Defaults to delphine → identical for the existing URL.
+
+**Verification:** root + os `tsc --noEmit` both clean. Static regression: Delphine
+render/bridge/adapter logic confirmed byte-identical to pre-P1E (data-field, section
+types, case routing, component invocations all match). No stale references.
+
+**Security:** No checks weakened, removed, or relaxed. RLS, CORS, token logic untouched.
+
+**Explicit non-goals honored:** No H8, no new brand activated, no SMCC/E-Woman/DRIMP
+behavior change, no UI redesign, no CRM/email/WhatsApp/AI/payments/auth changes.
+
+**Consequence:** The preview plane is brand-agnostic and ready for H8 (activate a brand
+by building its rendering plane, setting `<BRAND>_PUBLIC_SITE_URL`, and flipping
+`previewMode:"secure"`). H8 NOT started; awaits Product Owner approval.
+
+---
+
+## P1D.1 — Edit Bridge Hardening (2026-06-20)
+
+### Decision: Reject motion element editability, enforce origin, clear timers
+
+**Context:** Opus post-delivery audit found six issues in P1D: two truncated section files
+(AboutSection, BooksSection), data-editable on motion elements, two timer leaks, and a
+first-sender-wins security hole in the PREVIEW_INIT handler.
+
+**Decisions:**
+
+1. **data-editable on motion elements is wrong.** framer-motion manages its component's
+   DOM lifecycle and does not guarantee stable custom attributes across re-renders.
+   Editable attributes must live on inner, plain HTML leaf elements only.
+   Pattern: `<motion.h1><span data-editable="true" ...>{text}</span></motion.h1>`.
+   Applied to all three HeroSection editable fields (title, subtitle, body).
+
+2. **First-sender-wins is a postMessage security hole.** If a third-party page loads in
+   the iframe before the OS has a chance to send PREVIEW_INIT, it would hijack the bridge
+   and receive all subsequent FIELD_CHANGE/SECTION_CLICK messages.
+   Fix: pre-compute `configuredOsOrigin = new URL(OS_URL).origin` (static env var) and
+   validate `e.origin === configuredOsOrigin` before processing ANY message. PREVIEW_INIT
+   has an additional explicit guard. `trustedOriginRef` is now only ever set to values
+   that already passed the static origin check — it can never be hijacked.
+
+3. **Timer refs must be cleared on unmount.** React unmounts components without cancelling
+   any `setTimeout` handles in refs. A 600ms FIELD_CHANGE timer or 700ms `updateSection`
+   timer firing after unmount will attempt to postMessage or call a server action against
+   a component that no longer exists. Both OsPreview and BrandWorkspace now clear all
+   pending timer keys on useEffect cleanup.
+
+4. **`tsc -b` / `tsc -p tsconfig.app.json --noEmit` are the authoritative gates.**
+   `npx tsc --noEmit` without a project reference was masking errors in the root project.
+   The real gates must be used for all future P1D.1+ deliveries.
+
+**Consequence:** P1D.1 is production-safe for deployment pending human functional
+verification. All three typecheck gates exit 0.
+
+---
+
+## P1D.2 — Autosave Error State + Real-Time Preview Refresh (2026-06-20)
+
+### Decision: Explicit save state machine; bumpPreview(true) on success
+
+**Context:** Browser verification of P1D.1 passed all functional checks. Two runtime gaps
+remained: (1) a 503 cold-start response silently cleared the "Saving..." indicator as if
+save succeeded; (2) inline edits were not visible in the canvas without a manual reload.
+
+**Decisions:**
+
+1. **`updateSection` must be wrapped in try/catch with explicit state machine.**
+   Silent failure on 503 is not acceptable — the user may assume content was saved and
+   navigate away. The state machine (`idle → saving → saved | failed`) ensures the UI
+   accurately reflects the DB state at all times. "Save failed" persists until the user
+   triggers a new attempt — it does NOT auto-clear.
+
+2. **Preview refresh via `bumpPreview(true)` after successful save.**
+   The simplest correct approach for the current architecture: force a new preview session
+   with the updated `sectionsRef.current`. `onIframeLoad` already handles edit-mode
+   re-initialization via the PREVIEW_INIT handshake. The trade-off (focus/cursor lost
+   ~2s after user stops typing) is acceptable for this use case.
+   Alternative (live DOM patch via postMessage) rejected: adds complexity to OsPreview
+   and creates a divergence between what is rendered and what is in the DB snapshot.
+
+3. **`inlineSaveClearTimer` must be cleared on unmount.**
+   The "Saved ✓ → idle" transition uses a 2500ms timer. If the component unmounts while
+   the timer is pending (e.g., user navigates away immediately after save), the callback
+   would call `setState` on an unmounted component. Timer is cleared in useEffect cleanup.
+
+**Consequence:** Edit title → Saving... → Saved ✓ → canvas updates automatically.
+HTTP 503 → Save failed (persists). Delphine editing experience is production-ready
+pending human functional verification in a deployed browser session.
 

@@ -32,12 +32,13 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isDelphinePreview = pathname.startsWith("/api/preview/delphine");
+  // P1E: any brand's secure preview API is public (token-gated, not auth-gated).
+  const isPreviewApi = pathname.startsWith("/api/preview/");
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/api/public") ||
-    isDelphinePreview;
+    isPreviewApi;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -51,7 +52,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isDelphinePreview) {
+  if (isPreviewApi) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0");
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
     response.headers.set("Referrer-Policy", "no-referrer");

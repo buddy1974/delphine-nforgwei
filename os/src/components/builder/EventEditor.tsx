@@ -13,8 +13,9 @@ export default function EventEditor({ event }: { event: EventRow }) {
   const [reg, setReg] = useState<RegistrationStatus>(event.registration_status);
   const [image, setImage] = useState(event.featured_image_url ?? "");
 
+  // P1D.5: return result so AutoField can surface Save failed
   async function save(patch: EventPatch) {
-    await updateEvent(event.id, patch);
+    return await updateEvent(event.id, patch);
   }
 
   return (
@@ -68,7 +69,7 @@ export default function EventEditor({ event }: { event: EventRow }) {
         <div className="flex gap-4 items-start">
           <div className="flex-1">
             <AutoField label="Featured image URL" value={image} placeholder="https://… or /images/event.jpg"
-              onSave={async (v) => { setImage(v); await save({ featured_image_url: v }); }} />
+              onSave={async (v) => { setImage(v); return await save({ featured_image_url: v }); }} />
           </div>
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element

@@ -5,6 +5,7 @@ import heroBg from "@/assets/hero-bg.jpg";
 import delHero from "@/assets/del-hero.jpg";
 
 export interface HeroSectionProps {
+  sectionId?: string;
   title?: string;
   subtitle?: string;
   body?: string;
@@ -16,8 +17,9 @@ export interface HeroSectionProps {
 }
 
 export function HeroSection({
+  sectionId,
   title = "Delphine Mah Nforgwei",
-  subtitle = "Author\u00a0\u00a0·\u00a0\u00a0Speaker\u00a0\u00a0·\u00a0\u00a0Family Transformation Leader",
+  subtitle = "Author  ·  Speaker  ·  Family Transformation Leader",
   body = "Empowering individuals, strengthening families, and raising leaders who influence nations.",
   image_url,
   button_label = "Explore the Work",
@@ -74,13 +76,20 @@ export function HeroSection({
           {/* Left — Text */}
           <div className="max-w-xl lg:max-w-lg xl:max-w-xl space-y-10">
             <div className="space-y-6">
+              {/* P1D.1: data-editable on inner span, not on motion.h1 */}
               <motion.h1
                 className="font-serif text-[2.8rem] sm:text-[3.4rem] lg:text-[4rem] xl:text-[4.5rem] font-bold text-primary-foreground leading-[1.1] tracking-tight"
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, ease: "easeOut" }}
               >
-                {title}
+                <span
+                  data-editable="true"
+                  data-field="title"
+                  data-section-id={sectionId}
+                >
+                  {title}
+                </span>
               </motion.h1>
 
               <motion.div
@@ -93,13 +102,20 @@ export function HeroSection({
                 transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
               />
 
+              {/* P1D.1: data-editable on inner span, not on motion.p */}
               <motion.p
                 className="text-sm sm:text-[0.85rem] text-primary-foreground/65 font-medium tracking-[0.2em] uppercase"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.35, ease: "easeOut" }}
               >
-                {subtitle}
+                <span
+                  data-editable="true"
+                  data-field="subtitle"
+                  data-section-id={sectionId}
+                >
+                  {subtitle}
+                </span>
               </motion.p>
 
               <motion.div
@@ -120,13 +136,20 @@ export function HeroSection({
               </motion.div>
             </div>
 
+            {/* P1D.1: data-editable on inner span, not on motion.p */}
             <motion.p
               className="text-base sm:text-lg text-primary-foreground/70 leading-[1.7]"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.55, ease: "easeOut" }}
             >
-              {body}
+              <span
+                data-editable="true"
+                data-field="body"
+                data-section-id={sectionId}
+              >
+                {body}
+              </span>
             </motion.p>
 
             <motion.div

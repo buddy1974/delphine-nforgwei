@@ -5,6 +5,7 @@ import { FadeIn } from "@/components/FadeIn";
 import delAbout from "@/assets/del-about2.jpg";
 
 export interface AboutSectionProps {
+  sectionId?: string;
   title?: string;
   subtitle?: string;
   body?: string;
@@ -15,6 +16,7 @@ export interface AboutSectionProps {
 }
 
 export function AboutSection({
+  sectionId,
   title = "A Woman Called to Transform Lives.",
   subtitle = "About Delphine",
   body = "Delphine Mah Nforgwei is a Pastor, Relationship Coach, Author, and Founder of the E-Woman Conference. She is committed to helping women rediscover purpose, strengthen their marriages, and lead boldly in every sphere of life.",
@@ -45,10 +47,20 @@ export function AboutSection({
               <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
                 {subtitle}
               </span>
-              <h2 className="font-serif text-3xl sm:text-4xl lg:text-[2.6rem] font-bold text-foreground leading-tight">
+              <h2
+                className="font-serif text-3xl sm:text-4xl lg:text-[2.6rem] font-bold text-foreground leading-tight"
+                data-editable="true"
+                data-field="title"
+                data-section-id={sectionId}
+              >
                 {title}
               </h2>
-              <p className="text-base sm:text-lg text-muted-foreground leading-[1.7]">
+              <p
+                className="text-base sm:text-lg text-muted-foreground leading-[1.7]"
+                data-editable="true"
+                data-field="body"
+                data-section-id={sectionId}
+              >
                 {body}
               </p>
               {body2 && (

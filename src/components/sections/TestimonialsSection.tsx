@@ -8,6 +8,7 @@ export interface TestimonialItem {
 }
 
 export interface TestimonialsSectionProps {
+  sectionId?: string;
   title?: string;
   subtitle?: string;
   items?: TestimonialItem[];
@@ -20,6 +21,7 @@ const DEFAULT_TESTIMONIALS: TestimonialItem[] = [
 ];
 
 export function TestimonialsSection({
+  sectionId,
   title = "Stories of Change",
   subtitle = "Lives Transformed",
   items = DEFAULT_TESTIMONIALS,
@@ -32,7 +34,12 @@ export function TestimonialsSection({
             <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase" style={{ color: "hsl(38, 70%, 55%)" }}>
               {subtitle}
             </span>
-            <h2 className="font-serif text-3xl sm:text-4xl lg:text-[2.6rem] font-bold text-foreground leading-tight">
+<h2
+              className="font-serif text-3xl sm:text-4xl lg:text-[2.6rem] font-bold text-foreground leading-tight"
+              data-editable="true"
+              data-field="title"
+              data-section-id={sectionId}
+            >
               {title}
             </h2>
           </div>

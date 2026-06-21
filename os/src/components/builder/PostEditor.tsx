@@ -11,8 +11,9 @@ export default function PostEditor({ post }: { post: PostRow }) {
   const [status, setStatus] = useState<PageStatus>(post.status);
   const [imageUrl, setImageUrl] = useState(post.featured_image_url ?? "");
 
+  // P1D.5: return result so AutoField can surface Save failed
   async function save(patch: PostPatch) {
-    await updatePost(post.id, patch);
+    return await updatePost(post.id, patch);
   }
 
   async function handleStatus(next: PageStatus) {
@@ -66,7 +67,7 @@ export default function PostEditor({ post }: { post: PostRow }) {
           <div className="flex-1">
             <AutoField label="Featured image URL" value={imageUrl}
               placeholder="https://… or /images/photo.jpg"
-              onSave={async (v) => { setImageUrl(v); await save({ featured_image_url: v }); }} />
+              onSave={async (v) => { setImageUrl(v); return await save({ featured_image_url: v }); }} />
           </div>
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
