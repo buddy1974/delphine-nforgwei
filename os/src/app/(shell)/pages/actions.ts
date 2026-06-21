@@ -112,14 +112,22 @@ export async function addSection(
   return data as SectionRow;
 }
 
-/** Autosave: patch one section's editable fields. */
+/** Autosave: patch one section's editable fields.
+ * P1D.9: .select("id") verifies the row was actually updated.
+ * A zero-row result means the section does not exist (phantom write prevented).
+ */
 export async function updateSection(
   sectionId: string,
   patch: SectionPatch
 ): Promise<{ ok: true } | { error: string }> {
   const db = createSupabaseAdminClient();
-  const { error } = await db.from("sections").update(patch).eq("id", sectionId);
+  const { data, error } = await db
+    .from("sections")
+    .update(patch)
+    .eq("id", sectionId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: "No row updated — section may not exist." };
   return { ok: true };
 }
 
@@ -437,13 +445,15 @@ export interface VersionRow {
   created_at: string;
 }
 
-/** Save a snapshot of the current page state. */
+/** Save a snapshot of the current page state.
+ * P1D.9: Now returns { ok: true } | { error: string } — never swallows DB errors.
+ */
 export async function saveVersion(
   pageId: string,
   title: string,
   sections: SectionRow[],
   label?: string
-): Promise<void> {
+): Promise<{ ok: true } | { error: string }> {
   const db = createSupabaseAdminClient();
   const { data: page } = await db
     .from("pages")
@@ -451,13 +461,15 @@ export async function saveVersion(
     .eq("id", pageId)
     .single();
 
-  await db.from("page_versions").insert({
+  const { error } = await db.from("page_versions").insert({
     page_id: pageId,
     title,
     status: page?.status ?? "draft",
     sections: JSON.parse(JSON.stringify(sections)),
     label: label ?? null,
   });
+  if (error) return { error: error.message };
+  return { ok: true };
 }
 
 /** List all versions for a page, newest first. */

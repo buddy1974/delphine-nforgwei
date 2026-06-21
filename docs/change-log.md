@@ -1,5 +1,42 @@
 # Change Log
 
+## P1D.9 — Remaining Save Truthfulness Fixes — 2026-06-21
+
+### Context
+Audit after P1D.6 identified two remaining false-success paths not covered by `runSave`:
+1. `handleSaveDraft` → `saveVersion` swallowed DB insert errors → `setDraftSaved(true)` ran unconditionally
+2. `PageEditor` canvas FIELD_CHANGE path → direct `await updateSection(...)` with no result check
+
+### Files Changed
+
+**`os/src/app/(shell)/pages/actions.ts`**:
+- `saveVersion`: return type `Promise<void>` → `Promise<{ ok: true } | { error: string }>`. Captures Supabase insert error; returns `{ error }` on failure, `{ ok: true }` on success. Never swallows errors silently.
+- `updateSection`: added `.select("id")` after `.update()` — verifies the row was actually modified. Returns `{ error: "No row updated — section may not exist." }` if zero rows returned (phantom write prevention).
+
+**`os/src/components/BrandWorkspace.tsx`**:
+- Added `draftSaveError` state (`useState(false)`).
+- `handleSaveDraft`: wraps `saveVersion` in `runSave()`; gates `setDraftSaved(true)` on `result.ok`. On failure: `setDraftSaveError(true)`, auto-clears after 3 s.
+- `handlePublish`: wraps `saveVersion` in `runSave()`; if snapshot fails, logs and returns early — prevents publishing a stale version.
+- Save Draft button text: adds `"Draft failed"` error state alongside existing `"Saved ✓"` / `"Saving..."`.
+
+**`os/src/components/builder/PageEditor.tsx`**:
+- Added `InlineSaveState` type, `inlineSaveState` state, `inlineSaveClearTimer` ref, `latestSaveSeq` ref.
+- FIELD_CHANGE handler: replaced fire-and-forget `await updateSection(...)` with `runSave()` + seq guard + full state machine (`saving → saved → idle` or `saving → failed`).
+- useEffect cleanup: clear `inlineSaveTimers`, `inlineSaveClearTimer` on unmount.
+- Right-panel header: added `Saving... / Saved ✓ / Save failed` badge (10px, matches BrandWorkspace style).
+
+### TypeScript fix
+`saveVersion` returns `{ ok: true } | { error: string }` — the old-style union without `ok` on the failure branch. Accessing `.ok` / `.error` directly caused TS2339. Fix: wrap all `saveVersion` calls in `runSave()` — normalises to `SaveResult = { ok: true } | { ok: false; error: string }` which has `ok` on both branches.
+
+### Validation
+- `tsc -b`: PASS
+- `cd os && tsc --noEmit`: PASS
+
+### Status
+P1D.9 COMPLETE. No remaining false-success save path identified. P1D is closed. P1E can proceed after browser test and Marcel approval.
+
+---
+
 ## P1F — Secure Preview Transport Hardening — 2026-06-21
 
 ### Context

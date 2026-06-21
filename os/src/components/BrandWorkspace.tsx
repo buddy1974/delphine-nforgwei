@@ -127,6 +127,8 @@ export default function BrandWorkspace({
   /* ── Save Draft ── */
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
+  /* P1D.9: draft save error — shown when saveVersion returns { error } */
+  const [draftSaveError, setDraftSaveError] = useState(false);
 
   /* ── Helpers ── */
 
@@ -421,13 +423,24 @@ export default function BrandWorkspace({
   }
 
   /* ── Save Draft (version snapshot) ── */
+  // P1D.9: gate setDraftSaved on saveVersion ok===true — no false "Saved"
+  // runSave normalises { ok: true } | { error: string } → SaveResult with ok on both branches
   async function handleSaveDraft() {
     setDraftSaving(true);
+    setDraftSaveError(false);
     try {
       const currentPage = pages.find((p) => p.id === selectedPageId);
-      await saveVersion(selectedPageId, currentPage?.title ?? "Draft", sections);
-      setDraftSaved(true);
-      setTimeout(() => setDraftSaved(false), 2500);
+      const result = await runSave(() =>
+        saveVersion(selectedPageId, currentPage?.title ?? "Draft", sections)
+      );
+      if (result.ok) {
+        setDraftSaved(true);
+        setTimeout(() => setDraftSaved(false), 2500);
+      } else {
+        console.error("[P1D.9] Save Draft failed:", result.error);
+        setDraftSaveError(true);
+        setTimeout(() => setDraftSaveError(false), 3000);
+      }
     } finally {
       setDraftSaving(false);
     }
@@ -442,7 +455,14 @@ export default function BrandWorkspace({
       const pageSlug = currentPage?.slug;
 
       // 1. Snapshot current sections into an immutable page_versions row
-      await saveVersion(selectedPageId, pageTitle, sectionsRef.current, "Published");
+      // P1D.9: check result — abort if snapshot fails rather than publishing a stale version
+      const snapResult = await runSave(() =>
+        saveVersion(selectedPageId, pageTitle, sectionsRef.current, "Published")
+      );
+      if (!snapResult.ok) {
+        console.error("[P1D.9] Publish snapshot failed:", snapResult.error);
+        return;
+      }
 
       // 2. Fetch the just-created version id (newest first)
       const versions = await listVersions(selectedPageId);
@@ -583,7 +603,7 @@ export default function BrandWorkspace({
             className="text-[11px] font-semibold text-gray-600 border border-gray-200 px-2.5 py-1.5 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
             title="Save a version snapshot"
           >
-            {draftSaved ? "Saved" : draftSaving ? "Saving..." : "Save Draft"}
+            {draftSaved ? "Saved ✓" : draftSaving ? "Saving..." : draftSaveError ? "Draft failed" : "Save Draft"}
           </button>
 
           {/* History */}

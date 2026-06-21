@@ -118,6 +118,11 @@ export default function PageEditor({
   const selectedIdRef = useRef<string | null>(selectedId);
   const [isEditMode, setIsEditMode] = useState(false);
   const inlineSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  /* P1D.9: Canvas FIELD_CHANGE inline save state — mirrors BrandWorkspace */
+  type InlineSaveState = "idle" | "saving" | "saved" | "failed";
+  const [inlineSaveState, setInlineSaveState] = useState<InlineSaveState>("idle");
+  const inlineSaveClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestSaveSeq = useRef(0);
 
   // ── Drag state ─────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<SectionRow | null>(null);
@@ -192,13 +197,35 @@ export default function PageEditor({
         const key = `${sectionId}.${field}`;
         if (inlineSaveTimers.current[key]) clearTimeout(inlineSaveTimers.current[key]);
         inlineSaveTimers.current[key] = setTimeout(async () => {
-          await updateSection(sectionId, { [field as keyof SectionPatch]: value });
+          // P1D.9: runSave + seq guard + state machine — mirrors BrandWorkspace
+          const seq = (latestSaveSeq.current += 1);
+          setInlineSaveState("saving");
+          const result = await runSave(() =>
+            updateSection(sectionId, { [field as keyof SectionPatch]: value })
+          );
+          if (seq !== latestSaveSeq.current) return;
+          if (!result.ok) {
+            setInlineSaveState("failed");
+          } else {
+            setInlineSaveState("saved");
+            if (inlineSaveClearTimer.current) clearTimeout(inlineSaveClearTimer.current);
+            inlineSaveClearTimer.current = setTimeout(() => {
+              if (seq === latestSaveSeq.current) setInlineSaveState("idle");
+            }, 2500);
+            bumpPreview(true);
+          }
           delete inlineSaveTimers.current[key];
         }, 700);
       }
     }
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      // P1D.9: clear pending inline-save timers on unmount
+      Object.values(inlineSaveTimers.current).forEach(clearTimeout);
+      inlineSaveTimers.current = {};
+      if (inlineSaveClearTimer.current) clearTimeout(inlineSaveClearTimer.current);
+    };
   }, []);
 
   /* ── Section handlers ── */
@@ -482,6 +509,16 @@ export default function PageEditor({
         <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 flex-shrink-0 gap-2">
           <Link href="/pages" className="text-xs font-semibold text-gray-500 hover:text-charcoal flex items-center gap-1 flex-shrink-0">← Pages</Link>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* P1D.9: Canvas FIELD_CHANGE inline save badge */}
+            {inlineSaveState === "saving" && (
+              <span className="text-[10px] font-semibold text-amber-600 animate-pulse">Saving...</span>
+            )}
+            {inlineSaveState === "saved" && (
+              <span className="text-[10px] font-bold text-green-700">Saved ✓</span>
+            )}
+            {inlineSaveState === "failed" && (
+              <span className="text-[10px] font-bold text-red-600" title="Autosave failed — check connection">Save failed</span>
+            )}
             <span className="text-[11px] text-gray-400">Status</span>
             <select
               value={status}

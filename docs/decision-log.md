@@ -1,5 +1,26 @@
 # Decision Log
 
+## P1D.9 — Save Truthfulness Closure (2026-06-21)
+
+### Decision: wrap saveVersion in runSave(); gate all draft/publish paths on result.ok; harden updateSection with phantom-write detection
+
+**Context:** After P1D.6 introduced `runSave()` for the inspector and canvas edit paths, two gaps remained:
+1. `saveVersion` returned `Promise<void>` and swallowed all DB insert errors. `handleSaveDraft` called `setDraftSaved(true)` unconditionally — no save actually needed to succeed.
+2. `PageEditor` FIELD_CHANGE path called `await updateSection(...)` fire-and-forget — no error check, no state feedback.
+
+**Decision:**
+- `saveVersion`: change return type to `{ ok: true } | { error: string }`. Capture Supabase insert error. Never swallow.
+- All callers of `saveVersion` (handleSaveDraft, handlePublish) wrap in `runSave()` for consistent `SaveResult` typing. This is the P1D.6 pattern applied to the version snapshot path.
+- `handlePublish`: if snapshot fails, return early — do not attempt to publish a stale or wrong version.
+- `updateSection`: add `.select("id")` post-update to detect phantom writes (rows that don't exist being silently "updated" by Supabase with 0 rows modified but no error).
+- `PageEditor` FIELD_CHANGE: replace fire-and-forget with `runSave()` + monotonic seq guard + `InlineSaveState` machine. Add `Saving… / Saved ✓ / Save failed` badge in right panel header.
+
+**Rationale:** After P1D.6, the inspector path (AutoField) was sound. The save-draft, publish-snapshot, and PageEditor canvas paths were the remaining uncovered surface area. Every UI-visible "success" now requires explicit `result.ok === true` from `runSave()`. The `.select("id")` addition to `updateSection` makes the "no row updated" case visible — previously Supabase returned no error even when the target row didn't exist.
+
+**Consequence:** P1D is closed. No save path produces a false positive success signal. The `saveVersion` old-style union `{ ok: true } | { error: string }` required wrapping in `runSave()` rather than direct `.ok` access, because TypeScript cannot narrow `.ok` on the `{ error: string }` branch.
+
+---
+
 ## P1F — Secure Preview Transport Hardening: Retry Architecture (2026-06-21)
 
 ### Decision: Bounded retry (3 attempts) with last-good-iframe preservation for createPreviewSession
