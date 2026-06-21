@@ -53,6 +53,7 @@ import {
   moveToRoot,
   reorderRowChildren,
 } from "@/app/(shell)/pages/actions";
+import { runSave } from "@/lib/save-result";
 
 /* ── Drag overlay cards ──────────────────────────────────────── */
 function OverlayCard({ section, index }: { section: SectionRow; index: number }) {
@@ -201,11 +202,11 @@ export default function PageEditor({
   }, []);
 
   /* ── Section handlers ── */
-  // P1D.5: return the updateSection result so AutoField can show "Save failed"
+  // P1D.6: use runSave — strict ok===true detection, never throws
   async function handleSave(id: string, patch: SectionPatch) {
     setSections((prev) => prev.map((s) => s.id === id ? { ...s, ...patch } : s));
-    const result = await updateSection(id, patch);
-    if ("ok" in result) bumpPreview();
+    const result = await runSave(() => updateSection(id, patch));
+    if (result.ok) bumpPreview();
     return result;
   }
   async function handleAdd(type: SectionType) {

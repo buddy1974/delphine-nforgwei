@@ -5,15 +5,16 @@ import Link from "next/link";
 import AutoField from "./AutoField";
 import type { PostRow, PostPatch } from "@/lib/db/posts";
 import { PAGE_STATUSES, type PageStatus } from "@/lib/db/pages";
+import { runSave } from "@/lib/save-result";
 import { updatePost, setPostStatus } from "@/app/(shell)/blog/actions";
 
 export default function PostEditor({ post }: { post: PostRow }) {
   const [status, setStatus] = useState<PageStatus>(post.status);
   const [imageUrl, setImageUrl] = useState(post.featured_image_url ?? "");
 
-  // P1D.5: return result so AutoField can surface Save failed
+  // P1D.6: runSave normalizes all server/network errors — strict ok===true detection
   async function save(patch: PostPatch) {
-    return await updatePost(post.id, patch);
+    return await runSave(() => updatePost(post.id, patch));
   }
 
   async function handleStatus(next: PageStatus) {

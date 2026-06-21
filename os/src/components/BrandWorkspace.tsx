@@ -24,6 +24,7 @@ import SectionCard from "./builder/SectionCard";
 import { SECTION_TYPE_LABEL } from "@/lib/db/pages";
 import { createPreviewSession } from "@/app/(shell)/preview/actions";
 import type { PreviewInboundMsg } from "@/lib/preview-bridge";
+import { runSave } from "@/lib/save-result";
 
 /* ── postMessage types from preview iframe (shared P1E contract) ── */
 type PreviewMsg = PreviewInboundMsg;
@@ -181,30 +182,26 @@ export default function BrandWorkspace({
           // Stale responses (earlier seq) silently discard their state updates.
           const seq = (latestSaveSeq.current += 1);
           setInlineSaveState("saving");
-          try {
-            // P1D.3: updateSection returns { ok: true } | { error: string } — never throws on DB error.
-            const result = await updateSection(sectionId, { [field as keyof SectionPatch]: value });
-            // P1D.4: discard if a newer save has started since this one was awaited
-            if (seq !== latestSaveSeq.current) return;
-            if ("error" in result) {
-              setInlineSaveState("failed");
-            } else {
-              setInlineSaveState("saved");
-              // Clear "Saved ✓" badge after 2.5s — but only if no newer save has fired by then
-              if (inlineSaveClearTimer.current) clearTimeout(inlineSaveClearTimer.current);
-              inlineSaveClearTimer.current = setTimeout(() => {
-                if (seq === latestSaveSeq.current) setInlineSaveState("idle");
-              }, 2500);
-              // P1D.2: refresh canvas so changes appear without manual reload
-              bumpPreview(true);
-            }
-          } catch {
-            // P1D.4: discard stale network errors too
-            if (seq !== latestSaveSeq.current) return;
+          // P1D.6: runSave never throws — normalizes all server/network errors to { ok: false }
+          const result = await runSave(() =>
+            updateSection(sectionId, { [field as keyof SectionPatch]: value })
+          );
+          // P1D.4: discard if a newer save has started since this one was awaited
+          if (seq !== latestSaveSeq.current) return;
+          // P1D.6: strict positive check — only ok===true is success
+          if (!result.ok) {
             setInlineSaveState("failed");
-          } finally {
-            delete inlineSaveTimers.current[key];
+          } else {
+            setInlineSaveState("saved");
+            // Clear "Saved ✓" badge after 2.5s — only if no newer save has fired
+            if (inlineSaveClearTimer.current) clearTimeout(inlineSaveClearTimer.current);
+            inlineSaveClearTimer.current = setTimeout(() => {
+              if (seq === latestSaveSeq.current) setInlineSaveState("idle");
+            }, 2500);
+            // P1D.2: refresh canvas so changes appear without manual reload
+            bumpPreview(true);
           }
+          delete inlineSaveTimers.current[key];
         }, 700);
       }
     }
@@ -278,13 +275,13 @@ export default function BrandWorkspace({
   }
 
   /* ── Section edit handlers (inspector) ── */
-  // P1D.5: return the updateSection result so AutoField can show "Save failed"
+  // P1D.6: use runSave — strict ok===true detection, never throws
   async function handleSave(id: string, patch: SectionPatch) {
     setSections((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...patch } : s))
     );
-    const result = await updateSection(id, patch);
-    if ("ok" in result) bumpPreview();
+    const result = await runSave(() => updateSection(id, patch));
+    if (result.ok) bumpPreview();
     return result;
   }
 

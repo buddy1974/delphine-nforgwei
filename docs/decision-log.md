@@ -1,5 +1,19 @@
 # Decision Log
 
+## P1D.6 — SaveResult Normalization: Positive-Only Success Detection (2026-06-20)
+
+### Decision: Introduce runSave() normalizer; success requires explicit ok===true; no raw server action result reaches AutoField
+
+**Context:** P1D.5 used `if ("error" in result) → failed else → saved`. This is negative detection — it assumes success when no "error" key is present. But Next.js Server Action responses under real 503 conditions can resolve (not throw) with unexpected shapes: `undefined`, digest objects (`{ digest: "..." }`), or partial error payloads that don't have an "error" key. All of these silently become "Saved ✓".
+
+**Decision:** Create `os/src/lib/save-result.ts` with `SaveResult = { ok: true } | { ok: false; error: string }` and a `runSave()` wrapper. Positive check only: `result.ok === true` is the single success gate. Anything else — including unexpected shapes, undefined, thrown exceptions, 503 digest objects — normalizes to `{ ok: false, error: "Save failed" }`. All callers (BrandWorkspace, PageEditor, EventEditor, PostEditor) wrap their server action calls in `runSave()` before returning to AutoField. AutoField checks `!result.ok` for failure.
+
+**Rationale:** Defense-in-depth. The normalizer acts as a firewall between unpredictable Server Action response shapes and the UI state machine. Even if Next.js changes its error envelope format, or if a new action has a bug, the worst outcome is "Save failed" — never a false "Saved ✓". The type `{ ok: true } | { ok: false; error: string }` forces TypeScript to reject any code that doesn't account for both branches.
+
+**Consequence:** No code path can produce "Saved ✓" without explicit `result.ok === true` from `runSave()`. The FIELD_CHANGE canvas path in BrandWorkspace now also uses `runSave()` — both inspector and canvas edits are covered. The outer `try/catch` in the FIELD_CHANGE handler was removed (redundant since `runSave` absorbs all exceptions).
+
+---
+
 ## P1D.5 — Inspector Save Path: AutoField Owns the State Machine (2026-06-20)
 
 ### Decision: Fix AutoField, not BrandWorkspace FIELD_CHANGE path, for inspector autosave failures

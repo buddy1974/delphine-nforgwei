@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AutoField from "./AutoField";
+import type { SaveResult } from "@/lib/save-result";
 import MediaPicker from "./MediaPicker";
 import { SECTION_TYPE_LABEL, type SectionRow, type SectionPatch } from "@/lib/db/pages";
 
@@ -13,7 +14,7 @@ export default function SectionCard({
 }: {
   section: SectionRow;
   index: number;
-  onSave: (id: string, patch: SectionPatch) => Promise<{ ok: true } | { error: string }>;
+  onSave: (id: string, patch: SectionPatch) => Promise<SaveResult>;
   onDelete: (id: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);

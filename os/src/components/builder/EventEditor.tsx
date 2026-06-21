@@ -6,6 +6,7 @@ import AutoField from "./AutoField";
 import type { EventRow, EventPatch, RegistrationStatus } from "@/lib/db/events";
 import { REGISTRATION_STATUSES } from "@/lib/db/events";
 import { PAGE_STATUSES, type PageStatus } from "@/lib/db/pages";
+import { runSave } from "@/lib/save-result";
 import { updateEvent, setEventStatus } from "@/app/(shell)/events/actions";
 
 export default function EventEditor({ event }: { event: EventRow }) {
@@ -13,9 +14,9 @@ export default function EventEditor({ event }: { event: EventRow }) {
   const [reg, setReg] = useState<RegistrationStatus>(event.registration_status);
   const [image, setImage] = useState(event.featured_image_url ?? "");
 
-  // P1D.5: return result so AutoField can surface Save failed
+  // P1D.6: runSave normalizes all server/network errors — strict ok===true detection
   async function save(patch: EventPatch) {
-    return await updateEvent(event.id, patch);
+    return await runSave(() => updateEvent(event.id, patch));
   }
 
   return (

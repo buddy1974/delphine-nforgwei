@@ -1,5 +1,54 @@
 # Change Log
 
+## P1D.6 — SaveResult Normalization: Strict Positive Detection — 2026-06-20
+
+### Root Cause
+P1D.5 used negative success detection: `if ("error" in result) failed else saved`. This means any unexpected resolved value — `undefined`, `{}`, a Next.js digest object, a partial Server Action failure payload — falls through to `saved`. Real live Server Action 503s can resolve with unexpected shapes instead of throwing, producing false "Saved ✓".
+
+### Fix
+Introduced `os/src/lib/save-result.ts` with a `runSave()` normalizer. **ONLY `result.ok === true` is success. Everything else is failure.** All save wrappers now route through `runSave()` before returning to `AutoField`.
+
+### Files Changed
+
+**`os/src/lib/save-result.ts`** — NEW FILE (48 lines):
+- `export type SaveResult = { ok: true } | { ok: false; error: string }` — both branches carry `ok`, forcing callers to check positively
+- `export async function runSave(fn)` — wraps any server action; strict `ok === true` check; handles `{ error }` shape (old actions); treats `undefined`, digest objects, unexpected shapes as failure; catches all thrown exceptions; never throws
+
+**`os/src/components/builder/AutoField.tsx`**:
+- Removed local `type SaveResult` — now imports from `@/lib/save-result`
+- `if ("error" in result)` → `if (!result.ok)` — positive detection only
+
+**`os/src/components/BrandWorkspace.tsx`**:
+- Added `import { runSave }` from `@/lib/save-result`
+- `handleSave`: `await updateSection(id, patch)` → `await runSave(() => updateSection(id, patch))`; `if ("ok" in result)` → `if (result.ok)`
+- FIELD_CHANGE canvas path: `await updateSection(...)` → `await runSave(() => updateSection(...))` inside simplified try/finally; `if ("error" in result)` → `if (!result.ok)`
+
+**`os/src/components/builder/PageEditor.tsx`**:
+- Added `import { runSave }` 
+- `handleSave`: `await updateSection(id, patch)` → `await runSave(() => updateSection(id, patch))`; `if ("ok" in result)` → `if (result.ok)`
+
+**`os/src/components/builder/EventEditor.tsx`**:
+- Added `import { runSave }`
+- `save()`: `return await updateEvent(...)` → `return await runSave(() => updateEvent(...))`
+
+**`os/src/components/builder/PostEditor.tsx`**:
+- Added `import { runSave }`
+- `save()`: `return await updatePost(...)` → `return await runSave(() => updatePost(...))`
+
+**`os/src/components/builder/SectionCard.tsx`**:
+- Added `import type { SaveResult }` from `@/lib/save-result`
+- `onSave` prop type uses imported `SaveResult` instead of inline union
+
+### Validation
+- `tsc -b` (project refs): PASS
+- `tsc -p tsconfig.app.json --noEmit` (Vite SPA): PASS
+- `cd os && tsc --noEmit` (Next.js OS): PASS
+
+### Status
+P1D.6 COMPLETE. Ready for browser retest. STOP. Do not start P1E.
+
+---
+
 ## P1D.5 — Autosave Failure Path Source Verification + Real Fix — 2026-06-20
 
 ### Root Cause (Why P1D.3 and P1D.4 Had Zero Effect on Live Behavior)

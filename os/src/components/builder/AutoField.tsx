@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
-type SaveResult = { ok: true } | { error: string };
+import type { SaveResult } from "@/lib/save-result";
 
 /**
  * A debounced auto-saving field. Renders an auto-growing textarea (multiline)
@@ -56,9 +55,9 @@ export default function AutoField({
       try {
         const result = await onSave(next);
         if (seq !== seqRef.current) return;
-        if ("error" in result) {
-          // DB error returned as discriminated union — show failure; do NOT auto-clear
-          setState("failed");
+        // P1D.6: strict positive check — only result.ok === true is success
+        if (!result.ok) {
+          setState("failed"); // do NOT auto-clear
         } else {
           setState("saved");
           // Auto-clear "Saved ✓" after 1.2s, but only if no newer save has fired
