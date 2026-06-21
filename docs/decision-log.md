@@ -1,5 +1,21 @@
 # Decision Log
 
+## P1F — Secure Preview Transport Hardening: Retry Architecture (2026-06-21)
+
+### Decision: Bounded retry (3 attempts) with last-good-iframe preservation for createPreviewSession
+
+**Context:** After P1D closed save truthfulness, intermittent 503s from `createPreviewSession` remained. The old code called `createPreviewSession` once with no retry. Any transport failure — transient Supabase error, cold-start 503, timeout — replaced the working iframe with a red error panel, even when the previous preview was still valid.
+
+**Decision:** Wrap `createPreviewSession` (and only `createPreviewSession`) in a `runPreviewWithRetry()` loop inside the secure preview `useEffect`. 3 total attempts, 500 ms / 1500 ms backoff, 8 s per-attempt timeout via `Promise.race`. Business errors detected via `isPreviewBusinessError()` (module-level function + Set) abort immediately. `securePreviewUrl` and `securePreviewVersionId` are never cleared at retry start or on exhaustion — the last-good iframe stays mounted and visible throughout the retry cycle. Error panel only appears when all retries fail AND `securePreviewUrl === null` (no preview has ever succeeded in this session). A `PreviewStatus` state machine drives both the toolbar badge and the render branches.
+
+**Rationale:** The old single-attempt design made the preview system fragile to transient infrastructure errors. The last-good preservation is the most important behavioral improvement — the user's working canvas is never replaced with an error panel just because a refresh failed. Retry is bounded (not infinite) to avoid hammering Supabase on legitimate config errors. Business errors skip retry since they indicate a structural problem (bad brand key, page not found) that a retry cannot fix.
+
+**Consequence:** Preview instability from transient 503s now surfaces as "Preview retrying…" badge in the toolbar, with the previous iframe still visible. Only sustained failures (all 3 attempts + legitimate session) result in "Preview unavailable". This phase is Leg A only — Leg B (OsPreview route) unchanged.
+
+**Note:** P1D (save truthfulness) is fully closed. The remaining 503s were a separate issue in the preview transport, not the save layer. The naming is P1F (not P1E) — decision-log already records P1E as "Ecosystem Consolidation & Preview-Plane Generalization".
+
+---
+
 ## P1D.6 — SaveResult Normalization: Positive-Only Success Detection (2026-06-20)
 
 ### Decision: Introduce runSave() normalizer; success requires explicit ok===true; no raw server action result reaches AutoField

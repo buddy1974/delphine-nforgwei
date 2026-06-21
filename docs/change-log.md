@@ -1,5 +1,43 @@
 # Change Log
 
+## P1F — Secure Preview Transport Hardening — 2026-06-21
+
+### Context
+P1D (save truthfulness) is closed. Remaining intermittent 503s were from `createPreviewSession` transport instability — a separate issue from the save layer. This phase targets Leg A of the secure preview system only: `BrandWorkspace → createPreviewSession → preview_sessions`.
+
+### Problem
+`createPreviewSession` called once, no retry. A single 503 or transient Supabase error replaced the working iframe with an error panel, even if a previous preview was visible.
+
+### Fix
+**`os/src/components/BrandWorkspace.tsx`** — P1F patches (no other files changed):
+
+1. **Preview status lane** — new `PreviewStatus` state machine: `preview_idle | preview_refreshing | preview_retrying | preview_ok | preview_unavailable`. Completely independent of save state (`inlineSaveState`, `verifyState`).
+
+2. **Bounded retry** — `runPreviewWithRetry()` wraps `createPreviewSession` only. 3 total attempts, 500 ms / 1500 ms backoff, 8 s per-attempt timeout via `Promise.race`. Business errors (`Unknown brand.`, `Page not found.`, `Secure website preview is not enabled for...`, `Page does not belong to this brand.`) abort immediately — no retry. All other errors (transient DB, network thrown, timeout) retry.
+
+3. **Last-good iframe preserved** — `securePreviewUrl` and `securePreviewVersionId` are NOT cleared at retry start or on exhaustion. During retry, the existing iframe stays mounted and visible. Error panel only appears when `previewStatus === "preview_unavailable" && !securePreviewUrl` (no preview has ever loaded). After all retries fail with a last-good URL: toolbar shows "Preview unavailable" badge, iframe shows last-good session.
+
+4. **Toolbar badge** — `Preview…` (gray, pulse, first load only), `Preview retrying…` (amber, pulse), `Preview unavailable` (red, with title tooltip showing error).
+
+5. **Structured diagnostics** — `console.debug("[P1F]", { leg, status, attempt, timestamp, pageId, previewVersion, error? })` on every attempt, error, success, business-error, and exhaustion. No PII. `nextActionHeader` noted as `"unavailable from client path"`.
+
+6. **No router.refresh(), revalidatePath(), or location.reload()** — preview refresh remains iframe/session based per spec.
+
+### Business error helpers (module-level)
+```typescript
+const PREVIEW_BUSINESS_ERRORS = new Set<string>([...]);
+function isPreviewBusinessError(msg: string): boolean { ... }
+```
+
+### Validation
+- `tsc -b`: PASS
+- `cd os && tsc --noEmit`: PASS
+
+### Status
+P1F COMPLETE. STOP. Do not start H8. Do not push without Marcel approval.
+
+---
+
 ## P1D.6 — SaveResult Normalization: Strict Positive Detection — 2026-06-20
 
 ### Root Cause

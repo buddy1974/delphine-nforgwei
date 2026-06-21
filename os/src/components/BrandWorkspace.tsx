@@ -40,6 +40,23 @@ const STATUS_STYLE: Record<string, string> = {
 
 /* ═══════════════════════════════════════════════════════════════ */
 
+/* ── P1F: Preview transport hardening ──────────────────────────
+ * Business errors are returned by createPreviewSession without throwing.
+ * They must NOT be retried. All other errors (DB transient, timeout, thrown)
+ * get up to 2 retries with 500 ms / 1500 ms backoff.
+ */
+const PREVIEW_BUSINESS_ERRORS = new Set<string>([
+  "Unknown brand.",
+  "Page not found.",
+  "Page does not belong to this brand.",
+]);
+function isPreviewBusinessError(msg: string): boolean {
+  return (
+    PREVIEW_BUSINESS_ERRORS.has(msg) ||
+    msg.startsWith("Secure website preview is not enabled")
+  );
+}
+
 export interface BrandWorkspaceProps {
   brand: OsBrand;
   pages: Pick<PageRow, "id" | "title" | "slug" | "status">[];
@@ -74,6 +91,14 @@ export default function BrandWorkspace({
   const [securePreviewUrl, setSecurePreviewUrl] = useState<string | null>(null);
   const [securePreviewVersionId, setSecurePreviewVersionId] = useState<string | null>(null);
   const [securePreviewError, setSecurePreviewError] = useState<string | null>(null);
+  /* P1F: Preview status lane — completely independent of save state */
+  type PreviewStatus =
+    | "preview_idle"
+    | "preview_refreshing"
+    | "preview_retrying"
+    | "preview_ok"
+    | "preview_unavailable";
+  const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("preview_idle");
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isEditModeRef = useRef(false);
   const selectedIdRef = useRef<string | null>(null);
@@ -230,32 +255,135 @@ export default function BrandWorkspace({
 
     let active = true;
     const currentPage = pagesRef.current.find((p) => p.id === selectedPageId);
-    setPreviewLoading(true);
+    const pageTitle = currentPage?.title ?? "Preview";
+
+    // P1F: Signal refresh start. Do NOT clear securePreviewUrl / VersionId here
+    // so the last-good iframe stays visible throughout the retry cycle.
+    setPreviewStatus("preview_refreshing");
     setSecurePreviewError(null);
 
-    createPreviewSession(
-      brand.key,
-      selectedPageId,
-      currentPage?.title ?? "Preview",
-      sectionsRef.current
-    ).then((result) => {
-      if (!active) return;
-      if ("error" in result) {
-        setSecurePreviewUrl(null);
-        setSecurePreviewVersionId(null);
-        previewOriginRef.current = null;
-        setSecurePreviewError(result.error);
-      } else {
-        setSecurePreviewUrl(result.previewUrl);
-        setSecurePreviewVersionId(result.pageVersionId);
-        previewOriginRef.current = new URL(result.previewUrl).origin;
-      }
-      setPreviewLoading(false);
-    });
+    const MAX_ATTEMPTS = 3;
+    const ATTEMPT_TIMEOUT_MS = 8_000;
 
-    return () => {
-      active = false;
-    };
+    async function runPreviewWithRetry() {
+      let lastError = "Preview unavailable";
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        if (!active) return;
+
+        if (attempt > 1) {
+          setPreviewStatus("preview_retrying");
+          // 500 ms after attempt 1, 1500 ms after attempt 2
+          const delay = attempt === 2 ? 500 : 1500;
+          await new Promise<void>((r) => setTimeout(r, delay));
+          if (!active) return;
+        }
+
+        const ts = Date.now();
+        // P1F: structured diagnostic — no PII
+        console.debug("[P1F]", {
+          leg: "session",
+          status: "attempt",
+          attempt,
+          timestamp: ts,
+          pageId: selectedPageId,
+          previewVersion,
+          nextActionHeader: "unavailable from client path",
+        });
+
+        try {
+          const timeoutP = new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Preview session timeout")),
+              ATTEMPT_TIMEOUT_MS
+            )
+          );
+          const result = await Promise.race([
+            createPreviewSession(
+              brand.key,
+              selectedPageId,
+              pageTitle,
+              sectionsRef.current
+            ),
+            timeoutP,
+          ]);
+
+          if (!active) return;
+
+          if ("error" in result) {
+            console.debug("[P1F]", {
+              leg: "session",
+              status: "error",
+              attempt,
+              timestamp: ts,
+              pageId: selectedPageId,
+              previewVersion,
+              error: result.error,
+            });
+            if (isPreviewBusinessError(result.error)) {
+              // Known business error — no retry
+              setSecurePreviewError(result.error);
+              setPreviewStatus("preview_unavailable");
+              setPreviewLoading(false);
+              return;
+            }
+            // Transient error — loop to next attempt
+            lastError = result.error;
+          } else {
+            // Success — swap iframe to new session
+            console.debug("[P1F]", {
+              leg: "session",
+              status: "ok",
+              attempt,
+              timestamp: ts,
+              pageId: selectedPageId,
+              previewVersion,
+            });
+            setSecurePreviewUrl(result.previewUrl);
+            setSecurePreviewVersionId(result.pageVersionId);
+            previewOriginRef.current = new URL(result.previewUrl).origin;
+            setSecurePreviewError(null);
+            setPreviewStatus("preview_ok");
+            setPreviewLoading(true); // iframe is about to load
+            return;
+          }
+        } catch (err) {
+          if (!active) return;
+          const errMsg = err instanceof Error ? err.message : "Transport failure";
+          console.debug("[P1F]", {
+            leg: "session",
+            status: "thrown",
+            attempt,
+            timestamp: ts,
+            pageId: selectedPageId,
+            previewVersion,
+            error: errMsg,
+          });
+          lastError = errMsg;
+        }
+      }
+
+      // All attempts exhausted
+      if (!active) return;
+      console.debug("[P1F]", {
+        leg: "session",
+        status: "exhausted",
+        timestamp: Date.now(),
+        pageId: selectedPageId,
+        previewVersion,
+        error: lastError,
+      });
+      // P1F: Do NOT clear securePreviewUrl — last-good iframe stays visible.
+      // The error panel only appears when securePreviewUrl is still null
+      // (i.e. no preview has ever succeeded this session).
+      setSecurePreviewError(lastError);
+      setPreviewStatus("preview_unavailable");
+      setPreviewLoading(false);
+    }
+
+    runPreviewWithRetry();
+
+    return () => { active = false; };
   }, [brand.key, previewVersion, selectedPageId]);
 
   /* ── Page switching ── */
@@ -498,6 +626,26 @@ export default function BrandWorkspace({
             </span>
           )}
 
+          {/* P1F: Preview status lane badge */}
+          {previewStatus === "preview_refreshing" && !securePreviewUrl && (
+            <span className="text-[10px] font-semibold text-gray-400 animate-pulse">
+              Preview…
+            </span>
+          )}
+          {previewStatus === "preview_retrying" && (
+            <span className="text-[10px] font-semibold text-amber-500 animate-pulse">
+              Preview retrying…
+            </span>
+          )}
+          {previewStatus === "preview_unavailable" && (
+            <span
+              className="text-[10px] font-bold text-red-500"
+              title={securePreviewError ?? "Preview session failed"}
+            >
+              Preview unavailable
+            </span>
+          )}
+
           {/* P1C: Verification indicator */}
           {verifyState === "verifying" && (
             <span className="text-[10px] font-semibold text-amber-600 animate-pulse">
@@ -571,14 +719,20 @@ export default function BrandWorkspace({
                 <div className="h-full bg-plum w-2/3 animate-pulse" />
               </div>
             )}
-            {brand.previewMode === "secure" && securePreviewError ? (
+            {brand.previewMode === "secure" &&
+            previewStatus === "preview_unavailable" &&
+            !securePreviewUrl ? (
+              /* P1F: Error panel — only shown when no preview has ever loaded */
               <div className="absolute inset-0 flex items-center justify-center bg-white px-6 text-center">
                 <div>
                   <p className="text-sm font-bold text-red-600">Secure preview unavailable</p>
                   <p className="mt-2 max-w-md text-xs leading-5 text-gray-500">{securePreviewError}</p>
                 </div>
               </div>
-            ) : brand.previewMode === "secure" && !securePreviewUrl ? (
+            ) : brand.previewMode === "secure" &&
+              !securePreviewUrl &&
+              previewStatus !== "preview_ok" ? (
+              /* P1F: Loading placeholder — only during first session creation */
               <div className="absolute inset-0 flex items-center justify-center bg-white text-xs font-semibold text-gray-400">
                 Creating secure preview...
               </div>
