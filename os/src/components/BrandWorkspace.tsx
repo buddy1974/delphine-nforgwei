@@ -130,6 +130,10 @@ export default function BrandWorkspace({
   const [draftSaved, setDraftSaved] = useState(false);
   /* P1D.9: draft save error — shown when saveVersion returns { error } */
   const [draftSaveError, setDraftSaveError] = useState(false);
+  /* P0.2B: Publish error — persists until next attempt; never auto-clears */
+  const [publishError, setPublishError] = useState(false);
+  /* P0.2B: Transient publish success — shows "Published ✓" for 3 s then Unpublish appears */
+  const [publishSucceeded, setPublishSucceeded] = useState(false);
 
   /* ── Helpers ── */
 
@@ -458,46 +462,59 @@ export default function BrandWorkspace({
     }
   }
 
-  /* ── P1C: Publish exact revision (snapshot → publish → verify) ── */
+  /* ── P0.2B: Publish exact revision (snapshot → publish → verify) ──────────────
+   * P1C invariant: ONLY a successfully published immutable page_version may become public.
+   * A failed publish MUST leave page status unchanged.
+   * Removed: both updatePageMeta(status="published") fallback branches that violated this.
+   * ──────────────────────────────────────────────────────────────────────────────────── */
   function handlePublish() {
+    // Reset per-attempt state before each new publish attempt
+    setPublishError(false);
+    setPublishSucceeded(false);
     startPublish(async () => {
       setVerifyState("idle");
       const currentPage = pagesRef.current.find((p) => p.id === selectedPageId);
       const pageTitle = currentPage?.title ?? "Published";
       const pageSlug = currentPage?.slug;
 
-      // 1. Snapshot current sections into an immutable page_versions row
-      // P1D.9: check result — abort if snapshot fails rather than publishing a stale version
+      // 1. Snapshot current sections into an immutable page_versions row.
+      // P0.2B: snapshot failure is a hard stop — setPageStatus NOT called,
+      //        publishedVersionId NOT changed, bumpPreview NOT called.
       const snapResult = await runSave(() =>
         saveVersion(selectedPageId, pageTitle, sectionsRef.current, "Published")
       );
       if (!snapResult.ok) {
-        console.error("[P1D.9] Publish snapshot failed:", snapResult.error);
-        return;
+        console.error("[P0.2B] Publish snapshot failed:", snapResult.error);
+        setPublishError(true);
+        return; // ← page status unchanged
       }
 
-      // 2. Fetch the just-created version id (newest first)
+      // 2. Fetch the just-created version id (newest first).
+      // P0.2B: empty list is a hard failure — NEVER fall through to mutable draft publish.
+      //        Removed: updatePageMeta(status="published") fallback that was here.
       const versions = await listVersions(selectedPageId);
       const latest = versions[0];
       if (!latest) {
-        await updatePageMeta(selectedPageId, { status: "published" });
-        setPageStatus("published");
-        bumpPreview(true);
-        return;
+        console.error("[P0.2B] listVersions returned empty after successful saveVersion");
+        setPublishError(true);
+        return; // ← page status unchanged, publishedVersionId unchanged, bumpPreview NOT called
       }
 
-      // 3. Publish that exact immutable version — sets pages.published_version_id
+      // 3. Publish that exact immutable version — sets pages.published_version_id.
+      // P0.2B: publishVersion error is a hard failure — NEVER fall through to mutable draft publish.
+      //        Removed: updatePageMeta(status="published") fallback that was here.
       const result = await publishVersion(selectedPageId, latest.id);
       if ("error" in result) {
-        console.error("publishVersion failed:", result.error);
-        await updatePageMeta(selectedPageId, { status: "published" });
-        setPageStatus("published");
-        bumpPreview(true);
-        return;
+        console.error("[P0.2B] publishVersion failed:", result.error);
+        setPublishError(true);
+        return; // ← page status unchanged, publishedVersionId unchanged, bumpPreview NOT called
       }
 
+      // ── All three steps succeeded: content is now immutably published ──────
       setPageStatus("published");
       setPublishedVersionId(result.publishedVersionId);
+      setPublishSucceeded(true);
+      setTimeout(() => setPublishSucceeded(false), 3000);
       bumpPreview(true);
 
       // 4. Verify live content (2s delay for Vercel revalidation to propagate)
@@ -706,15 +723,25 @@ export default function BrandWorkspace({
             </span>
           )}
 
-          {/* Publish / Unpublish */}
-          {pageStatus !== "published" ? (
+          {/* Publish / Unpublish — P0.2B: four button states */}
+          {pageStatus !== "published" || publishSucceeded ? (
             <button
               type="button"
-              disabled={publishPending}
+              disabled={publishPending || publishSucceeded}
               onClick={handlePublish}
-              className="text-[11px] font-bold bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-60 transition-colors"
+              className={`text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 ${
+                publishError
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
             >
-              {publishPending ? "Publishing..." : "Publish"}
+              {publishPending
+                ? "Publishing..."
+                : publishSucceeded
+                ? "Published ✓"
+                : publishError
+                ? "Publish failed"
+                : "Publish"}
             </button>
           ) : (
             <button

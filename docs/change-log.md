@@ -930,3 +930,75 @@ Activated E-Woman Conference in the secure preview plane. E-Woman can now load i
 ### Status
 STOP. DO NOT START H8.2. DO NOT TOUCH SMCC. DO NOT TOUCH DRIMP. Human approval required before push.
 
+---
+
+## P0.2B — Publish Integrity: Remove Mutable-Draft Fallback Paths — 2026-06-22
+
+### Defect (P0 — Highest Priority)
+
+`handlePublish` in `BrandWorkspace.tsx` contained two failure paths that called
+`updatePageMeta(selectedPageId, { status: "published" })`, making mutable draft content
+live even when the immutable publish pipeline had just failed. This broke the core P1C
+invariant:
+
+```
+saveVersion() → success
+listVersions() → empty            ← updatePageMeta(status="published") fired ← BUG
+OR
+publishVersion() → error          ← updatePageMeta(status="published") fired ← BUG
+```
+
+Both paths made the mutable `sections` table visible to the public API (legacy fallback
+path in the public route), bypassing the immutable `page_versions` snapshot entirely.
+
+### Fix
+
+**`os/src/components/BrandWorkspace.tsx`** — `handlePublish` rewritten:
+
+1. **Snapshot failure** (`!snapResult.ok`): `setPublishError(true)`, return early.
+   — `setPageStatus` NOT called. `publishedVersionId` NOT changed. `bumpPreview` NOT called.
+
+2. **Empty versions list** (`versions.length === 0`): `setPublishError(true)`, return early.
+   — `setPageStatus` NOT called. `publishedVersionId` NOT changed. `bumpPreview` NOT called.
+   — Removed: `await updatePageMeta(selectedPageId, { status: "published" })` ← was here.
+
+3. **`publishVersion` error** (`"error" in result`): `setPublishError(true)`, return early.
+   — `setPageStatus` NOT called. `publishedVersionId` NOT changed. `bumpPreview` NOT called.
+   — Removed: `await updatePageMeta(selectedPageId, { status: "published" })` ← was here.
+
+4. **All three steps succeed**: `setPageStatus("published")`, `setPublishedVersionId(...)`,
+   `setPublishSucceeded(true)` (auto-clears after 3 s), `bumpPreview(true)`. Then verify.
+
+### New State
+
+- `publishError: boolean` — set on any failure path, persists until next attempt (does NOT auto-clear)
+- `publishSucceeded: boolean` — set on success, auto-clears after 3 s
+
+### Button States (P0.2B)
+
+| Condition | Label |
+|---|---|
+| `publishPending` | `Publishing...` |
+| `publishSucceeded` | `Published ✓` (3 s) |
+| `publishError` | `Publish failed` (persists) |
+| default | `Publish` |
+
+Button shows in Publish area while `pageStatus !== "published" || publishSucceeded`.
+After the 3 s `publishSucceeded` window, Unpublish button appears as normal.
+
+### Regression Guards (verified in code)
+- All three failure branches: `setPageStatus` NOT called ✓
+- All three failure branches: `publishedVersionId` NOT changed ✓
+- All three failure branches: `bumpPreview` NOT called ✓
+- `updatePageMeta(status="published")` no longer present in handlePublish ✓
+
+### Typecheck
+- `tsc -b` (root): **PASS** (exit 0)
+- `cd os && tsc --noEmit`: **PASS** (exit 0)
+
+### Scope
+Delphine only. One file changed. No H8, no brand work, no preview transport changes.
+
+### Status
+STOP. DO NOT START P0.3. Human approval required before push.
+

@@ -561,3 +561,41 @@ by: (1) flipping `previewMode` in brands.ts, (2) building the E-Woman OsPreview 
 NOT started. End-to-end function requires owner env var configuration + commit + deploy.
 See RISK-013.
 
+---
+
+## P0.2B — Publish Integrity Hole: Remove Mutable-Draft Fallback (2026-06-22)
+
+### Decision: All publish failure paths are hard stops — no fallback to mutable draft
+
+**Context (Defect):** `handlePublish` contained two `updatePageMeta(status="published")`
+calls in failure branches — one when `listVersions` returned empty, one when `publishVersion`
+returned an error. Both made the mutable `sections` table visible to the public API via the
+P1C legacy fallback path, bypassing the immutable `page_versions` snapshot. This violated
+the fundamental P1C invariant: "Only a successfully published immutable page_version may
+become public." Classified P0 by Opus audit.
+
+**Decision:**
+
+1. **All three failure branches in `handlePublish` are unconditional hard stops.**
+   `setPublishError(true)` + `return`. No `setPageStatus`, no `publishedVersionId` change,
+   no `bumpPreview`. The page's public state is never mutated on failure.
+
+2. **`versions.length === 0` after a successful `saveVersion` is treated as a hard failure.**
+   Previously this was treated as a recoverable edge case by falling through to `updatePageMeta`.
+   Rationale: if `saveVersion` returned ok but `listVersions` is empty, something is
+   structurally wrong with the DB state. A mutable publish would be worse than no publish.
+
+3. **`publishError` state does NOT auto-clear.**
+   The user must see "Publish failed" and explicitly retry. Auto-clearing would hide the
+   fact that a publish attempt failed, which is unacceptable for content integrity.
+
+4. **`publishSucceeded` state auto-clears after 3 s.**
+   Brief "Published ✓" label before the Unpublish button appears. Does not affect integrity.
+
+5. **`updatePageMeta` import retained** — it is still used for `unpublishPage` and other
+   callers. Only the two erroneous calls inside `handlePublish` failure branches were removed.
+
+**Consequence:** The P1C invariant is now enforced at the UI layer. A failed publish
+attempt leaves page status, publishedVersionId, and the live public route completely
+unchanged. The user sees "Publish failed" and must retry.
+
