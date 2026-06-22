@@ -873,3 +873,60 @@ Ready for deploy after owner git commit. Functional verification:
 `verifyPublishedVersion` operator-precedence bug flagged by Opus audit.
 NOT fixed in this phase — requires separate review and approval.
 
+---
+
+## H8.1 — E-Woman Secure Preview Canvas — 2026-06-22
+
+### Summary
+Activated E-Woman Conference in the secure preview plane. E-Woman can now load its real public website in the OS canvas iframe and use the full click-to-edit bridge.
+
+### Files Changed
+
+**`os/src/lib/brands.ts`**:
+- Changed E-Woman `previewMode: "generic"` → `previewMode: "secure"`
+- Also repaired a RISK-001 truncation: `getOsBrand` function body was missing (file truncated mid-return-type annotation). Restored via python3 append. `npx tsc --noEmit` confirmed exit 0 after repair.
+
+**`ewomen.conference/src/pages/OsPreview.tsx`** (NEW FILE):
+- Token extraction from URL search params
+- Fetches preview snapshot from `${VITE_OS_URL}/api/preview/ewoman?token=...`
+- Full bridge protocol: PREVIEW_INIT handshake, EDIT_MODE, HIGHLIGHT_SECTION, SECTION_CLICK, FIELD_CHANGE (600ms debounce)
+- E-Woman section adapter — OS section types → real E-Woman components + E-Woman-styled blocks
+- Security: postMessages accepted only from configured OS origin (VITE_OS_URL); nav guarded in edit mode; noindex/no-referrer meta
+- Loading/error states in E-Woman plum/magenta styling. Preview banner in E-Woman pink.
+
+**`ewomen.conference/src/App.tsx`** (restructured):
+- Added `import EwomanOsPreview from "./pages/OsPreview"`
+- `/os-preview/ewoman` route added OUTSIDE ContentProvider + Layout
+- All existing routes remain inside ContentProvider + Layout — zero regression
+
+### Section Adapter Coverage
+
+| OS section type(s) | Rendered as |
+|---|---|
+| `hero`, `banner` | E-Woman hero block (title/subtitle/body editable — NOT HeroSlider) |
+| `text`, `about`, `intro`, `convener`, `statement`, `movement` | E-Woman dark text block |
+| `cta`, `register`, `join`, `thankyou` | E-Woman magenta CTA block |
+| `image`, `gallery_preview` | Image section |
+| `testimonials`, `testimonial`, `voices` | TestimonialSlider (JSON body or defaults) |
+| `authors`, `testimonies` | AuthorsSection (static, wrapped with `data-section-id`) |
+| `visionaries`, `team`, `leadership` | VisionariesSection (static, wrapped with `data-section-id`) |
+| `countdown`, `event_block`, `event`, `nextedition` | CountdownTimer (`targetDate` from body) |
+| `programs`, `cards`, `highlights`, `features`, `experience` | E-Woman card grid (JSON body or body text) |
+| `stats`, `impact` | E-Woman stats grid |
+| `row` | Column grid with nested child sections |
+| (any other) | Generic E-Woman dark block with editable fields |
+
+### Typecheck
+- OS `npx tsc --noEmit`: **PASS** (exit 0)
+- E-Woman `npx tsc --noEmit`: **PASS** (exit 0)
+- E-Woman `npm run build` not run in sandbox — Windows-installed node_modules missing Linux rollup native (RISK-002). Vercel CI handles production build.
+
+### Owner Actions Required Before This Works End-to-End
+1. **`EWOMAN_PUBLIC_SITE_URL`** — set in OS Vercel project (e.g., `https://e-womanconference.online`). Required for `createPreviewSession` to return a valid preview URL.
+2. **`VITE_OS_URL`** — set in E-Woman Vercel project (production OS URL). The `.env` file has `http://localhost:3100/os`.
+3. **Commit both repos**: `git add -A && git commit -m "H8.1: E-Woman secure preview canvas"` then `git push`
+4. Confirm Vercel deployments complete for both OS and E-Woman projects.
+
+### Status
+STOP. DO NOT START H8.2. DO NOT TOUCH SMCC. DO NOT TOUCH DRIMP. Human approval required before push.
+

@@ -516,3 +516,48 @@ is hidden by default in Chrome/Edge DevTools. Inspector save path had no leg tag
 **Consequence:** All five diagnostic legs are now visible in default DevTools console.
 Inspector saves are independently traceable. No logic changed.
 
+---
+
+## H8.1 — E-Woman Secure Preview Activation (2026-06-22)
+
+### Decision: Activate E-Woman in the secure preview plane
+
+**Context:** P1E built a brand-agnostic preview/edit plane. H8.1 activates E-Woman
+by: (1) flipping `previewMode` in brands.ts, (2) building the E-Woman OsPreview consumer,
+(3) routing `/os-preview/ewoman` outside Layout in App.tsx.
+
+**Decisions:**
+
+1. **brands.ts flip is the complete OS-side activation gate.**
+   `createPreviewSession` already checks `brand.previewMode !== "secure"` and rejects
+   non-secure brands. `/api/preview/[brand]` already handles any brand. Setting
+   `previewMode: "secure"` for ewoman is all the OS needs. No new API routes.
+
+2. **OsPreview does NOT use ContentProvider or Layout.**
+   The preview route receives data from the OS API, not content.json. ContentProvider
+   would be wasted initialization. The no-Layout pattern is established by Delphine.
+
+3. **HeroSlider is NOT used in the section adapter.**
+   HeroSlider has no props and carries analytics tracking + RegistrationCounter side-effects
+   that must not fire inside the OS preview plane. A dedicated E-Woman-styled hero block
+   with `data-editable` fields is implemented instead.
+
+4. **AuthorsSection and VisionariesSection used as-is (static, wrapped with `data-section-id`).**
+   These have no props and render hardcoded data. Wrapping them provides click-to-select
+   without requiring prop injection. Their hardcoded data is intentional and acceptable
+   for the preview plane — content edits are not expected for these sections.
+
+5. **TestimonialSlider and CountdownTimer used with prop injection.**
+   TestimonialSlider: `testimonials` prop — parsed from OS section body JSON or defaults.
+   CountdownTimer: `targetDate` prop — from OS section body string.
+
+6. **RISK-001 scope extended: brands.ts was truncated.**
+   Prior RISK-001 description said truncation only affects files in parenthesized App Router
+   groups. brands.ts (not in a group) was found truncated with `getOsBrand` function body
+   missing. RISK-001 applies to any large file write via Edit/Write tools — not just
+   (shell)/(preview) route groups.
+
+**Consequence:** E-Woman is now in the secure preview plane. H8.2 (SMCC) and H8.3 (DRIMP)
+NOT started. End-to-end function requires owner env var configuration + commit + deploy.
+See RISK-013.
+

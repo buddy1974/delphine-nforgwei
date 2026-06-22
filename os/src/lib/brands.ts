@@ -4,9 +4,9 @@
  * reads the table; keep keys in sync: delphine | smcc | ewoman | drimp.
  *
  * P1E: each brand declares a `previewMode`:
- *   - "secure"  → edit-the-website secure preview plane (Delphine; H8 target)
+ *   - "secure"  → edit-the-website secure preview plane (Delphine + E-Woman via H8.1)
  *   - "generic" → OS-internal generic block preview (current default)
- * Only Delphine is "secure". Other brands stay "generic" until H8 activates them.
+ * Delphine and E-Woman are "secure". SMCC and DRIMP stay "generic" until future H8 phases.
  */
 
 export interface OsBrand {
@@ -45,7 +45,7 @@ export const OS_BRANDS: OsBrand[] = [
     domain: "e-womanconference.online",
     accent: "#8A3B5C",
     active: true,
-    previewMode: "generic",
+    previewMode: "secure", // H8.1: E-Woman real-component secure preview enabled
   },
   {
     key: "drimp",
