@@ -58,6 +58,23 @@ function isPreviewBusinessError(msg: string): boolean {
   );
 }
 
+/* P1.1: backoff that resolves false (instead of firing late) if the signal
+ * aborts mid-wait — lets a superseded/timed-out preview run bail immediately. */
+function abortableDelay(ms: number, signal: AbortSignal): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    if (signal.aborted) return resolve(false);
+    const timer = setTimeout(() => resolve(true), ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve(false);
+      },
+      { once: true }
+    );
+  });
+}
+
 export interface BrandWorkspaceProps {
   brand: OsBrand;
   pages: Pick<PageRow, "id" | "title" | "slug" | "status">[];
@@ -106,6 +123,9 @@ export default function BrandWorkspace({
   const sectionsRef = useRef<SectionRow[]>(initialSections);
   const pagesRef = useRef(pages);
   const previewOriginRef = useRef<string | null>(null);
+  /* P1.1: aborts the in-flight secure-preview session creation when a newer
+   * previewVersion supersedes it — kills client-side session storms. */
+  const previewAbortRef = useRef<AbortController | null>(null);
 
   /* ── Inline save debounce ── */
   const inlineSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -261,6 +281,11 @@ export default function BrandWorkspace({
     if (brand.previewMode !== "secure") return;
 
     let active = true;
+    // P1.1: supersede any in-flight session creation before starting a new one.
+    previewAbortRef.current?.abort();
+    const controller = new AbortController();
+    previewAbortRef.current = controller;
+    const signal = controller.signal;
     const currentPage = pagesRef.current.find((p) => p.id === selectedPageId);
     const pageTitle = currentPage?.title ?? "Preview";
 
@@ -276,14 +301,15 @@ export default function BrandWorkspace({
       let lastError = "Preview unavailable";
 
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        if (!active) return;
+        if (!active || signal.aborted) return;
 
         if (attempt > 1) {
           setPreviewStatus("preview_retrying");
           // 500 ms after attempt 1, 1500 ms after attempt 2
           const delay = attempt === 2 ? 500 : 1500;
-          await new Promise<void>((r) => setTimeout(r, delay));
-          if (!active) return;
+          // P1.1: abortable backoff — bail immediately if superseded/timed-out
+          const slept = await abortableDelay(delay, signal);
+          if (!active || signal.aborted || !slept) return;
         }
 
         const ts = Date.now();
@@ -299,12 +325,24 @@ export default function BrandWorkspace({
         });
 
         try {
-          const timeoutP = new Promise<never>((_, reject) =>
-            setTimeout(
+          // P1.1: per-attempt timeout, also rejected on abort so a superseded
+          // attempt stops consuming the (client-uncancellable) server-action
+          // result. The dispatched action still completes server-side; DB-side
+          // dedup/cleanup is tracked separately (P2/P3, pending approval).
+          const timeoutP = new Promise<never>((_, reject) => {
+            const t = setTimeout(
               () => reject(new Error("Preview session timeout")),
               ATTEMPT_TIMEOUT_MS
-            )
-          );
+            );
+            signal.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(t);
+                reject(new Error("Preview superseded"));
+              },
+              { once: true }
+            );
+          });
           const result = await Promise.race([
             createPreviewSession(
               brand.key,
@@ -315,7 +353,7 @@ export default function BrandWorkspace({
             timeoutP,
           ]);
 
-          if (!active) return;
+          if (!active || signal.aborted) return;
 
           if ("error" in result) {
             logP1F({
@@ -355,7 +393,18 @@ export default function BrandWorkspace({
             return;
           }
         } catch (err) {
-          if (!active) return;
+          if (!active || signal.aborted) {
+            // P1.1: superseded/timed-out — drop result, stop further attempts.
+            logP1F({
+              leg: "session",
+              status: "aborted",
+              attempt,
+              timestamp: ts,
+              pageId: selectedPageId,
+              previewVersion,
+            });
+            return;
+          }
           const errMsg = err instanceof Error ? err.message : "Transport failure";
           logP1F({
             leg: "session",
@@ -390,7 +439,11 @@ export default function BrandWorkspace({
 
     runPreviewWithRetry();
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+      // P1.1: abort in-flight backoff/timeout so superseded runs stop cleanly.
+      controller.abort();
+    };
   }, [brand.key, previewVersion, selectedPageId]);
 
   /* ── Page switching ── */
