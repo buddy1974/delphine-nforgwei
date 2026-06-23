@@ -1,12 +1,13 @@
 /**
- * Brand registry — Phase C static mirror of the `brands` DB table
+ * Brand registry - Phase C static mirror of the `brands` DB table
  * (seeded by supabase/migrations/0001). From Phase D the switcher
  * reads the table; keep keys in sync: delphine | smcc | ewoman | drimp.
  *
  * P1E: each brand declares a `previewMode`:
- *   - "secure"  → edit-the-website secure preview plane (Delphine + E-Woman via H8.1)
- *   - "generic" → OS-internal generic block preview (current default)
- * Delphine and E-Woman are "secure". SMCC and DRIMP stay "generic" until future H8 phases.
+ *   - "secure"  - edit-the-website secure preview plane
+ *   - "generic" - OS-internal generic block preview (current default)
+ * Delphine (P1E), E-Woman (H8.1), and SMCC (H8.2) are "secure".
+ * DRIMP stays "generic" - product decision required before activation.
  */
 
 export interface OsBrand {
@@ -31,12 +32,12 @@ export const OS_BRANDS: OsBrand[] = [
   },
   {
     key: "smcc",
-    name: "SMCC — School of Marriage Counseling & Coaching",
+    name: "SMCC - School of Marriage Counseling & Coaching",
     shortName: "SMCC",
     domain: "smcc.solutions",
     accent: "#5B1A5D",
     active: true,
-    previewMode: "generic",
+    previewMode: "secure", // H8.2: SMCC real-component secure preview enabled
   },
   {
     key: "ewoman",
@@ -63,8 +64,7 @@ export const DEFAULT_BRAND_KEY: OsBrand["key"] = "delphine";
 /**
  * P1E: env var NAME that holds each brand's public-site origin used by the
  * secure preview plane. These are names only (client-safe); the values are
- * read server-side in lib/preview-config.ts. Other-brand vars are prepared
- * for H8 but inert until that brand's previewMode is "secure".
+ * read server-side in lib/preview-config.ts.
  */
 export const PREVIEW_SITE_URL_ENV: Record<OsBrand["key"], string> = {
   delphine: "DELPHINE_PUBLIC_SITE_URL",

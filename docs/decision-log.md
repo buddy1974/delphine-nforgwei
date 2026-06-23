@@ -1,5 +1,20 @@
 # Decision Log
 
+## H8.2 — SMCC Preview Architecture — 2026-06-23
+
+**Decision:** SMCC secure preview uses Next.js App Router route group `(preview-plane)` to bypass the root layout (which includes StickyBar, KodeeChat, Analytics). A minimal layout at `src/app/(preview-plane)/layout.tsx` serves the preview iframe cleanly.
+
+**Rationale:** SMCC runs Next.js 14 App Router (not Vite/React like E-Woman). Route groups allow a separate layout chain without URL-path changes. The preview URL `/os-preview/smcc` is layout-neutral.
+
+**Decision:** Server component `page.tsx` reads `searchParams.token`, client component `SmccPreviewCanvas.tsx` handles all browser APIs (postMessage, useEffect). This avoids Suspense boundary complexity while keeping "use client" at the canvas level.
+
+**Decision:** `cohort` section type uses `COHORTS[0]` as data source with OS `heading`/`tagline` override (not `title` — `CohortProgram` type uses `heading`).
+
+**Decision:** DRIMP remains `previewMode: "generic"` — product decision required before activating a DRIMP secure preview consumer.
+
+---
+
+
 ## P1D.8 — Save Draft False Success: Root Cause (2026-06-21)
 
 ### Decision: Use runSave() wrapper for saveVersion; gate setDraftSaved on result.ok

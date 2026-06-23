@@ -1,5 +1,70 @@
 # Change Log
 
+## H8.1 — E-Woman Config Hygiene — 2026-06-23
+
+### Changes
+- `ewomen.conference/.env.example` created (was missing).
+- `os/.env.example` comment updated: EWOMAN_PUBLIC_SITE_URL and SMCC_PUBLIC_SITE_URL marked active with production values.
+- Stale "NOT active yet" comment removed from OS env template.
+- Confirmed: `brands.ts` ewoman previewMode already "secure" (set in prior session).
+- Confirmed: `ewomen.conference/src/pages/OsPreview.tsx` exists and is complete.
+- Confirmed: `ewomen.conference/src/App.tsx` route `/os-preview/ewoman` is wired.
+
+### Typecheck
+- `ewomen.conference tsc --noEmit`: PASS (no errors)
+
+---
+
+## H8.2 — SMCC Secure Real-Preview — 2026-06-23
+
+### Changes
+- `os/src/lib/brands.ts` — SMCC `previewMode` changed from `"generic"` to `"secure"`.
+- `smcc.solutions/src/app/(preview-plane)/layout.tsx` — Minimal preview-plane layout created. Suppresses StickyBar, KodeeChat, Analytics from the preview iframe.
+- `smcc.solutions/src/app/(preview-plane)/os-preview/smcc/page.tsx` — Server component wrapper. Reads `searchParams.token` (Next.js App Router idiom) and passes to canvas.
+- `smcc.solutions/src/app/(preview-plane)/os-preview/smcc/SmccPreviewCanvas.tsx` — Client component. Full OS bridge protocol (PREVIEW_INIT, PREVIEW_READY, EDIT_MODE, HIGHLIGHT_SECTION, SECTION_CLICK, FIELD_CHANGE). Real SMCC components: CohortSection, PillarsSection, Books, CTA. SMCC-styled generic blocks for all other section types.
+- `smcc.solutions/.env.example` — Created. Documents NEXT_PUBLIC_OS_URL and all other SMCC env vars.
+
+### Section adapter coverage
+| Section type | Renderer |
+|---|---|
+| hero, banner | SMCC-styled plum gradient block |
+| cohort, program, enrollment | Real `CohortSection` (COHORTS[0] + OS heading/tagline override) |
+| pillars, values, features, curriculum | Real `PillarsSection` |
+| books, resources | Real `Books` |
+| cta, enroll, apply, register | Real `CTA` |
+| about, intro, mission, text, statement | SMCC blush text block |
+| team, founders, leadership, faculty | Member grid or image |
+| faq, questions | FAQ card list |
+| contact, admissions | Plum gradient contact block |
+| stats, impact, credibility | Stat grid |
+| image, gallery | Image block |
+| testimonials, voices | Testimonial card grid |
+| (default) | SMCC blush generic block |
+
+### Typecheck
+- `os tsc --noEmit`: PASS
+- `smcc.solutions tsc --noEmit`: PASS
+- `ewomen.conference tsc --noEmit`: PASS
+
+### Regression
+- Delphine: previewMode "secure" — UNCHANGED
+- E-Woman: previewMode "secure" — UNCHANGED
+- SMCC: previewMode "secure" — NEWLY ACTIVATED
+- DRIMP: previewMode "generic" — UNCHANGED
+- /api/preview/delphine: exists — UNCHANGED
+- /api/preview/[brand]: handles ewoman + smcc — UNCHANGED
+- save-result.ts: UNTOUCHED
+- publishVersion: UNTOUCHED
+- P1F diagnostics: UNTOUCHED
+
+### Known limitations
+- SMCC preview requires browser test via Claude Chrome Extension to verify iframe load, bridge handshake, and SECTION_CLICK in the OS.
+- NEXT_PUBLIC_OS_URL must be set in Vercel for smcc.solutions for production preview to work.
+- StickyBar/KodeeChat: suppressed in preview-plane layout. Verify no rendering bleed in browser.
+
+---
+
+
 ## P1D.8 — Save Draft Button Truthfulness — 2026-06-21
 
 ### Audit Result
